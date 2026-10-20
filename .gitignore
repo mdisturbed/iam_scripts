@@ -1,0 +1,24 @@
+# Evidence output must never be committed
+output/
+**/output/
+*.csv
+*.json
+*.log
+!docs/**/*.json
+
+# Keys and certificates
+*.pfx
+*.p12
+*.cer
+*.pem
+*.key
+
+# Local HR or data exports
+*export*.*
+!tools/**
+!scripts/**
+
+# Editor / OS
+.vscode/
+.DS_Store
+Thumbs.db
