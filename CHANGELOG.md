@@ -5,6 +5,7 @@ All notable changes to these scripts are recorded here. Each script also carries
 ## 1.2.1 - 2026-10-20
 
 ### Added
+- `LICENSE` (MIT) and an Author section in the README.
 - `tools/New-FindingEvidence.ps1` 1.0.0: reads a run folder and prints the finding's Scope count, Evidence (with SHA-256) and Closure criteria (exact rerun command and metric), to console, file or clipboard.
 - `docs/jira-finding-template.md`: Jira issue fields, description template, severity guide with examples from the scripts, worked example and evidence rules.
 

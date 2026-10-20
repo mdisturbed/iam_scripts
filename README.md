@@ -756,3 +756,11 @@ Results were checked against the values the mock data should produce, not only f
 ## Version history
 
 See [CHANGELOG.md](CHANGELOG.md).
+
+## Author
+
+Written and maintained by Jay Klinkowsky ([jay@everydayidentity.tech](mailto:jay@everydayidentity.tech)). Issues and pull requests are welcome; for anything else, email.
+
+## License
+
+[MIT](LICENSE). Provided as is, without warranty. Review the scripts and run `tools/Test-ReadOnly.ps1` before using them in your environment.
