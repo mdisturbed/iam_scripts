@@ -79,7 +79,8 @@ iam_scripts/
 ├── .gitignore                    blocks evidence, keys and data exports from being committed
 ├── scripts/                      the twenty-two discovery scripts (self-contained, run independently)
 ├── tools/
-│   └── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
+│   ├── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
+│   └── New-FindingEvidence.ps1   pre-fills a Jira finding's Scope, Evidence and Closure from a run folder
 ├── examples/                     placeholder input templates for scripts 06, 14 and 15
 │   ├── hr.example.csv
 │   ├── iga-accounts.example.csv
@@ -700,7 +701,7 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 1. Run `Test-ReadOnly.ps1` and share the result with whoever approves the run.
 2. Pilot each script yourself using the [pilot runbook](docs/pilot-runbook.md).
 3. Collect each `summary.csv` into the status update, plus `dataset-status.csv` for anything `Blocked` or `EvidenceUnavailable`.
-4. Log each finding in Jira with the [finding template](docs/jira-finding-template.md), citing the run folder and SHA-256.
+4. Log each finding in Jira with the [finding template](docs/jira-finding-template.md); `tools/New-FindingEvidence.ps1` pre-fills the Evidence and Closure sections from the run folder.
 5. After remediation, rerun with the same parameters and compare summaries; that rerun is the finding's closure evidence.
 
 ## Troubleshooting

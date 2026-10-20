@@ -4,6 +4,7 @@ One finding = one Jira issue. Every finding carries the same sections, so the ar
 
 - [Issue fields](#issue-fields)
 - [Description template](#description-template) (copy this)
+- [Pre-fill Evidence and Closure from a run](#pre-fill-evidence-and-closure-from-a-run)
 - [Severity guide](#severity-guide)
 - [Worked example](#worked-example)
 - [Rules for evidence in Jira](#rules-for-evidence-in-jira)
@@ -81,6 +82,34 @@ Paste into the issue description. Jira Cloud converts the Markdown as you paste;
 ## Notes / open questions
 - <anything unconfirmed, who to ask>
 ```
+
+## Pre-fill Evidence and Closure from a run
+
+`tools/New-FindingEvidence.ps1` reads a run folder (manifest, dataset status, summary) and prints the **Scope** count, **Evidence** and **Closure criteria** sections ready to paste, including the SHA-256 and the exact rerun command with the same parameters. It only reads the run folder.
+
+```powershell
+# 1. See the metric names and datasets in a run
+.\tools\New-FindingEvidence.ps1 -RunFolder D:\Evidence\22-PimRoleSettings\20261021-140501Z -ListMetrics
+
+# 2. Build the sections: count rows matching a filter, tie closure to a summary metric, copy to clipboard
+.\tools\New-FindingEvidence.ps1 -RunFolder D:\Evidence\22-PimRoleSettings\20261021-140501Z `
+    -Dataset pim-role-settings -FilterColumn Flags -FilterValue Tier0NoApproval -FilterMode Contains `
+    -Metric 'Tier 0 roles activatable without approval' -TargetValue 0 `
+    -EvidenceLocation '<evidence store link>' -Clipboard
+```
+
+| Parameter | Purpose |
+|-----------|---------|
+| `-RunFolder` | One timestamped run folder |
+| `-Dataset` | Dataset name (with or without `.csv`) to count and hash |
+| `-FilterColumn`, `-FilterValue`, `-FilterMode` | Count only matching rows; mode `Like` (wildcards, default), `Equals`, `Match` (regex), `Contains` |
+| `-ExampleColumn` | Show up to three values from this column; use only for IDs or role names, not personal data |
+| `-Metric`, `-TargetValue` | Closure line from `summary.csv` (default target `0`) |
+| `-EvidenceLocation`, `-VerifiedAgainst` | Fill those two lines |
+| `-ListMetrics` | Print the run's metrics and datasets, then stop |
+| `-OutFile`, `-Clipboard` | Save or copy the result |
+
+Scripts that read an input file (06, 14, 15) record only its file name; the output reminds you to supply the current export when rerunning.
 
 ## Severity guide
 
