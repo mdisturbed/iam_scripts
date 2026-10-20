@@ -1,254 +1,68 @@
-# Output reference
+# Output and evidence
 
-Every run folder also contains `summary.csv` (headline metrics), `dataset-status.csv`, `run-manifest.json` and `run.log`. All timestamps are UTC, ISO 8601.
+What every run writes, what the dataset statuses mean, and how to handle the files. Per-script output files and columns are on each [script page](scripts/README.md).
 
-## 01-MfaCoverage
+## Run folder
 
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `ca-policies.csv` | CA policy | `State`, `RequiresMfa`, `BlocksLegacyAuth`, include/exclude scope resolved to names, `ClientAppTypes`, `SessionControls` |
-| `ca-exclusions.csv` | Exclusion on a policy | `PolicyName`, `ExclusionType` (User/Group/Role/GuestOrExternal), `DisplayName` |
-| `ca-excluded-group-members.csv` | Member of an excluded group (transitive) | `GroupName`, `ExcludedFromPolicies`, `MemberUPN`, `AccountEnabled` |
-| `mfa-registration.csv` | User | `IsMfaRegistered`, `IsMfaCapable`, `MethodsRegistered`, `HasSmsOrVoice`, `HasPhoneMethodOnly`, `IsAdmin` |
-| `signins-singlefactor-success.csv` | User + app + client | `IsLegacyAuth`, `SignInCount`, first/last seen, `CaStatuses` |
+```
+<OutputRoot>\
+  07-RoleMining\
+    20261020-140501Z\
+      attribute-quality.csv      data files (one per dataset)
+      role-candidates.csv
+      ...
+      summary.csv                headline metrics for the status report
+      dataset-status.csv         one row per dataset: status, rows, SHA-256, note
+      run-manifest.json          who / where / when / scopes / parameters / datasets
+      run.log                    timestamped log of the run
+```
 
-**Reading it:** registered is not the same as enforced. A user can be registered and still sign in with a password if no enabled policy requires MFA for that sign-in; the single-factor file shows where that actually happened.
+- All timestamps are UTC, ISO 8601, independent of the run machine's regional settings.
+- `run-manifest.json` records the Windows account and machine, the Graph account and app, the scopes in the token, the Azure / Exchange connection where used, the parameters, and every dataset with its row count and SHA-256.
+- Each run gets a new folder, so reruns never overwrite earlier evidence. Compare `summary.csv` across runs to show change.
+- Scripts that read an input file (06, 14, 15) record its SHA-256, so you can prove which export was used without storing it with the results.
 
-## 02-PrivilegedAccess
+## Dataset statuses
 
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `role-assignments-active.csv` | Active assignment | `RoleName`, `IsTier0Role`, `PrincipalType`, `AssignmentType`, `IsPermanent`, `MemberType` |
-| `role-assignments-eligible.csv` | Eligible assignment | `IsPermanentlyEligible` |
-| `role-group-members.csv` | Member of a role-holding group | `RolesGranted`, `MemberUPN` |
-| `role-assignable-groups.csv` | Role-assignable group | `HoldsRoles`, `OwnerCount`, `SyncedFromOnPrem` |
-| `privileged-users.csv` | Privileged user | `SyncedFromOnPrem`, `LastSignInUtc`, `IsMfaRegistered`, `HoldsTier0Role`, `Roles`, `Flags` |
+| Status | Meaning | What to do |
+|--------|---------|------------|
+| `Completed` | Data collected. Zero rows is still Completed. | Nothing |
+| `Blocked` | Permission denied or the call failed | Fix access, rerun |
+| `Deferred` | Skipped on purpose by a switch, or an optional input wasn't supplied | Rerun with the switch or input when ready |
+| `EvidenceUnavailable` | The tenant can't produce it (e.g. licence not present) | Record as a finding |
 
-Tier 0 roles are listed at the top of the script and can be extended.
+## Handling the output
 
-## 03-AppsAndConsents
+The CSVs contain identity data (names, UPNs, sign-in activity, group membership, mail forwarding targets), and scripts 06, 14 and 15 read HR or IGA exports. Treat every run folder as sensitive:
 
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `tenant-consent-settings.csv` | Setting | User consent policy, app registration by users, admin-consent workflow |
-| `app-registrations.csv` | App registration | `OwnerCount`, credential counts, `HasExpiredCredential`, `HasLongLivedSecret`, `NextExpiryDays` |
-| `app-credentials.csv` | Secret or certificate | `EndUtc`, `DaysToExpiry`, `LifetimeDays`, `Status` |
-| `service-principals.csv` | Service principal | `OwnerClass` (ThisTenant/ThirdParty/ManagedIdentity/Microsoft), `Publisher`, `LastSignInUtc` |
-| `app-permissions-application.csv` | App role granted to a client | `Permission`, `RiskCategory` (DataAccess / PrivilegeEscalation) |
-| `app-permissions-delegated.csv` | Delegated grant | `ConsentType` (Admin/User), `ConsentedBy`, `Scopes`, `HighRiskScopes` |
-| `app-risk-summary.csv` | Non-Microsoft app holding permissions | high-risk permissions, owners, last sign-in, `Flags`, `TriageScore` |
+- Store output only in the approved evidence location, **never in this repository**. `.gitignore` excludes `output/` and all CSV, JSON and log files; only the placeholder templates in `examples/` are allowed.
+- Follow the environment's retention rule and delete local copies once evidence is filed.
+- Use `-SampleValueCount 0` with script 08 if attribute values could be personal data.
+- Do not paste raw output into tools that aren't approved for that data.
 
-**Reading it:** `app-risk-summary.csv` is the first draft of the "where is my data going" map. `TriageScore` only orders the list for review; it is not a risk rating. It shows what each app is *authorised* to reach, not what it actually moved.
+## Output files by script
 
-## 04-ADPrivilegedAndServiceAccounts
+- [01 MFA coverage](scripts/01-mfa-coverage.md#output): `ca-policies.csv`, `ca-exclusions.csv`, `ca-excluded-group-members.csv`, `mfa-registration.csv`, `signins-singlefactor-success.csv`
+- [02 Entra privileged access](scripts/02-entra-privileged-access.md#output): `role-assignments-active.csv`, `role-assignments-eligible.csv`, `role-group-members.csv`, `role-assignable-groups.csv`, `privileged-users.csv`
+- [03 Apps and consents](scripts/03-apps-and-consents.md#output): `tenant-consent-settings.csv`, `app-registrations.csv`, `app-credentials.csv`, `service-principals.csv`, `app-permissions-application.csv`, `app-permissions-delegated.csv`, `app-risk-summary.csv`
+- [04 AD privileged and service accounts](scripts/04-ad-privileged-and-service-accounts.md#output): `ad-privileged-membership.csv`, `ad-privileged-accounts.csv`, `ad-service-account-candidates.csv`, `ad-admincount-orphans.csv`
+- [05 AD group nesting](scripts/05-ad-group-nesting.md#output): `ad-groups.csv`, `ad-circular-nesting.csv`
+- [06 JML timing](scripts/06-jml-timing.md#output): `jml-matched.csv`, `jml-terminated-still-enabled.csv`, `jml-activity-after-termination.csv`, `jml-hr-active-no-account.csv`, `jml-ad-orphan-candidates.csv`
+- [07 Role mining](scripts/07-role-mining.md#output): `attribute-quality.csv`, `attribute-value-variants.csv`, `populations.csv`, `birthright-candidates.csv`, `role-candidates.csv`, `outliers.csv`
+- [08 Extension attribute inventory](scripts/08-extension-attribute-inventory.md#output): `ad-attribute-usage.csv`, `entra-cloudonly-extension-usage.csv`, `entra-directory-extensions.csv`, `entra-custom-security-attributes.csv`
+- [09 Mail forwarding and external sharing](scripts/09-mail-forwarding-and-external-sharing.md#output): `exo-accepted-domains.csv`, `exo-mailbox-forwarding.csv`, `exo-inbox-rules.csv`, `exo-transport-rules.csv`, `exo-remote-domains.csv`, `exo-outbound-spam-policies.csv`, `spo-tenant-sharing-settings.csv`, `spo-site-sharing.csv`
+- [10 Guest access](scripts/10-guest-access.md#output): `external-collaboration-settings.csv`, `guests.csv`, `guests-by-domain.csv`
+- [11 Azure RBAC](scripts/11-azure-rbac.md#output): `azure-management-groups.csv`, `azure-subscriptions.csv`, `azure-role-assignments.csv`, `azure-eligible-assignments.csv`, `azure-custom-roles.csv`, `azure-classic-administrators.csv`
+- [12 Stale accounts](scripts/12-stale-accounts.md#output): `identity-activity.csv`, `ad-computers.csv`
+- [13 Hybrid sync scope](scripts/13-hybrid-sync-scope.md#output): `sync-tenant-status.csv`, `sync-ou-coverage-users.csv`, `ad-users-not-in-entra.csv`, `entra-synced-without-ad-match.csv`, `cloud-only-possible-duplicates.csv`, `user-provisioning-errors.csv`, `sync-ou-coverage-groups.csv`, `entra-synced-groups-without-ad-match.csv`
+- [14 IGA reconciliation](scripts/14-iga-reconciliation.md#output): `iga-input-profile.csv`, `accounts-ad-not-in-iga.csv`, `accounts-iga-not-in-ad.csv`, `account-status-mismatch.csv`, `governed-groups.csv`, `memberships-outside-iga.csv`, `assignments-not-in-ad.csv`, `ungoverned-groups.csv`
+- [15 Rule-managed access](scripts/15-rule-managed-access.md#output): `role-definition-check.csv`, `user-reconciliation.csv`, `drift-detail.csv`
+- [16 Device posture](scripts/16-device-posture.md#output): `entra-devices.csv`, `intune-devices.csv`, `compliance-policies.csv`, `ca-device-requirements.csv`
+- [17 AWS IAM posture](scripts/17-aws-iam-posture.md#output): `aws-accounts.csv`, `aws-iam-users.csv`, `aws-access-keys.csv`, `aws-iam-roles.csv`, `aws-saml-providers.csv`, `aws-access-analyzer-findings.csv`, `aws-identity-center-permission-sets.csv`, `aws-identity-center-assignments.csv`
+- [18 AD delegation](scripts/18-ad-delegation.md#output): `ad-delegations.csv`, `ad-nondefault-owners.csv`, `ad-delegation-by-trustee.csv`
+- [19 DC authentication protocols](scripts/19-dc-authentication-protocols.md#output): `dc-read-status.csv`, `ntlm-logons.csv`, `ntlm-validations.csv`, `kerberos-weak-encryption.csv`
+- [20 Governance coverage](scripts/20-governance-coverage.md#output): `access-review-definitions.csv`, `access-review-latest-decisions.csv`, `review-coverage.csv`, `access-packages.csv`
+- [21 Identity risk](scripts/21-identity-risk.md#output): `risky-users.csv`, `risk-detections.csv`, `risk-detections-by-type.csv`, `risky-service-principals.csv`, `ca-risk-policies.csv`
+- [22 PIM role settings](scripts/22-pim-role-settings.md#output): `pim-role-settings.csv`
 
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `ad-privileged-membership.csv` | Member found while expanding a protected group | `PrivilegedGroup`, `Depth`, `NestingPath` |
-| `ad-privileged-accounts.csv` | Privileged account | `PrivilegedVia`, `Flags` (stale, never-expiring or old password, Kerberoastable, pre-auth disabled, delegation, nested-only) |
-| `ad-service-account-candidates.csv` | Candidate service account | `DetectionReasons`, `IsPrivileged`, `Stale`, `PasswordAgeDays`, `HasManagedBy` |
-| `ad-admincount-orphans.csv` | Account with adminCount=1 no longer in a protected group | hygiene columns |
-
-**Reading it:** service accounts are candidates found by heuristics (SPN, never-expiring password, name pattern, description, gMSA). Confirm with owners before reporting a count as fact.
-
-## 05-ADGroupNesting
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `ad-groups.csv` | Group | `DirectMembers`, `DirectGroupMembers`, `DepthDown`, `DepthUp`, `CycleId`, `Flags` |
-| `ad-circular-nesting.csv` | Nesting loop | `Groups` |
-
-`DepthDown` counts levels of groups nested inside a group; `DepthUp` counts levels of groups it sits inside.
-
-## 06-JmlTiming
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `jml-matched.csv` | AD account matched to an HR record | `CreateLagDays`, `DisableLagDays`, `ADLastLogonUtc`, `EntraLastSignInUtc`, `Flags` |
-| `jml-terminated-still-enabled.csv` | Terminated person with an enabled account | |
-| `jml-activity-after-termination.csv` | Logon or sign-in more than a day after termination | |
-| `jml-hr-active-no-account.csv` | Active HR record with no AD account | |
-| `jml-ad-orphan-candidates.csv` | Enabled AD account with no HR match | `Reason` |
-
-**Caveats:** disable time is approximated from the last change to `userAccountControl`, so it can be later than the real disable. `lastLogonTimestamp` replicates on a 9-14 day cycle, so AD logon-after-termination is indicative; the Entra sign-in check is more precise.
-
-## 07-RoleMining
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `attribute-quality.csv` | Grouping attribute | `BlankPct`, `DistinctRawValues`, `DistinctNormalizedValues`, `ValuesWithSpellingVariants`, `PopulationsMeetingMin` |
-| `attribute-value-variants.csv` | Normalised value | `VariantCount`, `Variants` (each raw spelling with its count) |
-| `populations.csv` | Attribute value | `Users`, `MeetsMinPopulation` |
-| `birthright-candidates.csv` | Group held by almost everyone | `Holders`, `PctOfAllUsers` |
-| `role-candidates.csv` | Group held by at least `-CommonThreshold` of a population | `PctInPopulation`, `PctOfAllUsers`, `Lift`, `Classification` (BirthrightCandidate / RoleCandidate / Common) |
-| `outliers.csv` | User + group | `Type` (MissingRoleCandidate / UncommonAccess) |
-
-**Reading it:** fix the attribute data before designing roles. A `VariantCount` above 1 means the same department or job code is spelled more than one way, which splits populations and breaks rule-based assignment. `Lift` near 1 means a group is common everywhere, not specific to that population, so it's more likely birthright than a department role.
-
-## 08-ExtensionAttributes
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `ad-attribute-usage.csv` | Object type + attribute | `Populated`, `PopulatedPct`, `DistinctValues`, `MaxLength`, `FormatHints`, `SampleValues`, `Status` (InUse / Rare / Unused / NotInSchema) |
-| `entra-cloudonly-extension-usage.csv` | extensionAttribute1-15 on cloud-only users | as above |
-| `entra-directory-extensions.csv` | Schema extension registered by an app | `ExtensionName`, `DataType`, `TargetObjects`, `OwningApp`, `UsersWithValue` |
-| `entra-custom-security-attributes.csv` | Custom security attribute definition | `AttributeSet`, `Name`, `Type`, `IsCollection` |
-
-**Reading it:** *Unused* means no object holds a value today. Before claiming an attribute, confirm no Entra Connect sync rule, Exchange feature or application reads it.
-
-## 09-MailAndSharing
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `exo-accepted-domains.csv` | Accepted domain | used to decide internal vs external |
-| `exo-mailbox-forwarding.csv` | Mailbox with forwarding set | `ForwardingSmtpAddress`, `ForwardingAddressResolved`, `DeliverToMailboxAndForward`, `IsExternal` |
-| `exo-inbox-rules.csv` | Inbox rule that forwards, redirects, deletes or buries mail | `ExternalTargets`, `MoveToFolder`, `DeleteMessage`, `Flags` (ExternalForward / InternalForward / DeletesOrBuriesMail / ForwardAndHide) |
-| `exo-transport-rules.csv` | Transport rule that redirects, copies or BCCs | `ExternalTargets`, `State`, `Mode` |
-| `exo-remote-domains.csv` | Remote domain | `AutoForwardEnabled` |
-| `exo-outbound-spam-policies.csv` | Outbound spam policy | `AutoForwardingMode` |
-| `spo-tenant-sharing-settings.csv` | Tenant sharing setting | `Setting`, `Value` |
-| `spo-site-sharing.csv` | Site | `SharingCapability`, `AnyoneLinksAllowed`, `ExternalSharingAllowed` |
-
-**Reading it:** review `ForwardAndHide` rules first; forwarding mail externally while hiding replies is a classic sign of a compromised mailbox. External forwarding only works if both the outbound spam policy and the remote domain allow it, so read those two files together.
-
-## 10-GuestAccess
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `external-collaboration-settings.csv` | Setting | Who can invite, guest access level, cross-tenant defaults |
-| `guests.csv` | Guest | `HomeDomain`, `InvitationState`, `LastSignInUtc`, `GroupCount`, `DirectoryRoles`, `AppAssignments`, `Sponsors`, `Flags` |
-| `guests-by-domain.csv` | Home domain | `Guests`, `PendingInvitation`, `NeverSignedIn`, `Stale` |
-
-## 11-AzureRbac
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `azure-management-groups.csv` | Management group | |
-| `azure-subscriptions.csv` | Subscription in scope | `State` |
-| `azure-role-assignments.csv` | Role assignment | `Scope`, `ScopeLevel`, `RoleName`, `RoleType`, `IsPrivilegedRole`, `PrincipalType`, `PrincipalName`, `Flags` |
-| `azure-eligible-assignments.csv` | PIM eligible assignment | `RoleName`, `PrincipalName`, `EndUtc` |
-| `azure-custom-roles.csv` | Custom role | `Actions`, `Risky`, `AssignmentCount` |
-| `azure-classic-administrators.csv` | Classic co-administrator | |
-
-**Reading it:** `OrphanedPrincipal` rows point at deleted identities and are the safest clean-up. `PrivilegedAtBroadScope` rows are the highest-impact standing access. Check the summary's "Scopes that could not be read" before treating counts as complete.
-
-## 12-StaleAccounts
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `identity-activity.csv` | Identity (AD and/or Entra) | `Source` (Hybrid / ADOnly / CloudOnly), `ADEnabled`, `EntraEnabled`, `ADLastLogonUtc`, `EntraLast*Utc`, `NewestActivityUtc`, `NewestActivitySource`, `ActivityBucket`, `Flags` |
-| `ad-computers.csv` | Computer account (`-IncludeComputers`) | `LastLogonUtc`, `PasswordLastSetUtc`, `Stale` |
-
-**Reading it:** `NewestActivityUtc` is the newer of AD and Entra. `EnabledMismatch` means disabled on one side and enabled on the other, often a leaver disabled on-prem whose cloud object hasn't synced yet, or the reverse.
-
-## 13-HybridSyncScope
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `sync-tenant-status.csv` | Setting | last sync, last password-hash sync, feature flags |
-| `sync-ou-coverage-users.csv` | OU holding users | `Users`, `SyncedUsers`, `SyncedPct`, `InferredScope` |
-| `ad-users-not-in-entra.csv` | Enabled AD user with no Entra twin | `ParentOU`, `Note` |
-| `entra-synced-without-ad-match.csv` | Synced Entra user with no AD match here | `Classification` (OtherDomain / OrphanedSyncedObject / NoMatchInThisDomain) |
-| `cloud-only-possible-duplicates.csv` | Cloud-only user resembling an AD user | `MatchesADAccounts`, `MatchStrength` (Strong / NameOnly) |
-| `user-provisioning-errors.csv` | Provisioning error | `Category`, `PropertyCausingError`, `Value` |
-| `sync-ou-coverage-groups.csv` | OU holding groups (`-IncludeGroups`) | as for users |
-| `entra-synced-groups-without-ad-match.csv` | Synced Entra group with no AD match here | `Classification` |
-
-**Reading it:** scope is inferred from results. An OU at 100% is in scope, 0% is out of scope, and anything in between has an explanation to find: an attribute filter, sync errors, or objects created after the last sync.
-
-## 14-IgaReconciliation
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `iga-input-profile.csv` | Input fact | rows read, SHA-256, systems seen, status values and how each was mapped |
-| `accounts-ad-not-in-iga.csv` | AD account the IGA doesn't know | `Enabled`, `Classification` (UnmanagedEnabled / UnmanagedDisabled / ServiceOrAdminPattern) |
-| `accounts-iga-not-in-ad.csv` | IGA account with no AD account | `IgaStatus`, `IgaStatusClass` |
-| `account-status-mismatch.csv` | Account whose status differs | `MismatchType` (IgaInactive_ADEnabled / IgaActive_ADDisabled / UnmappedIgaStatus) |
-| `governed-groups.csv` | Group referenced by an IGA assignment | `IgaAssignments`, `ADUserMembers`, `InBoth`, `ADOnly`, `IgaOnly` |
-| `memberships-outside-iga.csv` | AD membership with no IGA assignment | |
-| `assignments-not-in-ad.csv` | IGA assignment not present in AD | `Finding` (NotProvisioned / AccountMissingInAD / GroupMissingInAD) |
-| `ungoverned-groups.csv` | Security group with users that no IGA assignment references | `UserMembers` |
-
-**Reading it:** check `iga-input-profile.csv` first. If a status value maps to `Unknown`, extend the status lists and rerun before trusting mismatches.
-
-## 15-RuleManagedAccess
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `role-definition-check.csv` | Role-group mapping, untagged or unused rule group, or undefined rule-map role | `Issue` (GroupNotFound / GroupNotTaggedRuleManaged / TaggedButNotInAnyRole / RoleInMapNotDefined) |
-| `user-reconciliation.csv` | User | `AppliedRoles`, `ExpectedRoles`, `RolesToAdd`, `RolesToRemove`, `UnknownRoles`, `MissingGroups`, `ExtraRuleGroups`, `Issues`, `Status` |
-| `drift-detail.csv` | Difference | `Type` (MissingGroup / ExtraRuleGroup / RoleToAdd / RoleToRemove) |
-
-**Reading it:** `RolesToAdd` / `RolesToRemove` mean the user's HR attributes changed but the applied roles didn't, which is a mover the automation didn't process. `ExtraRuleGroups` means someone was added to a rule-managed group by hand, or kept it from an old role.
-
-## 16-DevicePosture
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `entra-devices.csv` | Entra device object | `JoinType`, `IsManaged`, `IsCompliant`, `LastSignInUtc`, `Flags` |
-| `intune-devices.csv` | Intune managed device | `ComplianceState`, `LastCheckInUtc`, `IsEncrypted`, `HasEntraObject`, `Flags` |
-| `compliance-policies.csv` | Compliance policy | `Platform`, `AssignmentCount`, `Unassigned` |
-| `ca-device-requirements.csv` | CA policy that uses device state | `RequiresCompliantDevice`, `RequiresHybridJoined`, `DeviceFilterRule`, `IncludePlatforms`, `State` |
-
-**Reading it:** a require-compliant-device policy only protects as far as devices are enrolled and evaluated. Unmanaged enabled devices can't pass it, and an unassigned device passes it if the tenant treats devices with no policy as compliant.
-
-## 17-AwsIamPosture
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `aws-accounts.csv` | Account | `ReadStatus`, `RootMfaEnabled`, `RootAccessKeysPresent`, `PasswordPolicy` |
-| `aws-iam-users.csv` | IAM user | `ConsoleAccess`, `MfaDevices`, `AttachedPolicies`, `InlinePolicies`, `DaysSinceActivity`, `Flags` |
-| `aws-access-keys.csv` | Access key | `AgeDays`, `LastUsedUtc`, `LastUsedService`, `Flags` (key ID truncated) |
-| `aws-iam-roles.csv` | IAM role | `TrustedPrincipals`, `CrossAccountIds`, `AttachedPolicies`, `LastUsedUtc`, `Flags` |
-| `aws-saml-providers.csv` | SAML provider | `ValidUntilUtc` |
-| `aws-access-analyzer-findings.csv` | Active external-access finding | `ResourceType`, `Resource`, `Principal`, `IsPublic` |
-| `aws-identity-center-permission-sets.csv` | Permission set | `SessionDuration`, `ManagedPolicies`, `InlineWildcard`, `IsAdminSet` |
-| `aws-identity-center-assignments.csv` | Assignment | `PermissionSet`, `AccountId`, `PrincipalType`, `PrincipalName`, `Flags` |
-
-**Reading it:** `AdminAccess` means AdministratorAccess, IAMFullAccess or PowerUserAccess is attached directly or through a group. `CrossAccountNoCondition` trusts another account without an ExternalId or source condition.
-
-## 18-ADDelegation
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `ad-delegations.csv` | Risky right held by a non-default trustee on a target | `Target`, `Tier`, `Trustee`, `Right`, `AppliesTo`, `AppliesToObjects`, `Severity` |
-| `ad-nondefault-owners.csv` | Target with a non-default owner | `Owner`, `Severity` |
-| `ad-delegation-by-trustee.csv` | Trustee | `HighestSeverity`, `Rights`, `Tier0Targets`, `OUTargets` |
-
-**Reading it:** severity is Critical for any right on a Tier 0 object (domain root, AdminSDHolder, DC OU, protected groups) and for DCSync anywhere. `AppliesToObjects` shows which object class an OU-level right applies to (e.g. ResetPassword on `user`).
-
-## 19-DcAuthProtocols
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `dc-read-status.csv` | DC + query | `Status`, `EventsRead`, `CappedAtMax`, `LogStartsUtc`, `HoursCovered` |
-| `ntlm-logons.csv` | NTLM version + account + source | `NtlmVersion`, `Account`, `SourceWorkstation`, `SourceIp`, `Count`, first / last seen |
-| `ntlm-validations.csv` | Account + workstation + status | `Count`, `Status` |
-| `kerberos-weak-encryption.csv` | Account + service + encryption + client | `RequestType`, `Encryption`, `Count` |
-
-**Reading it:** NTLM V1 should be zero. RC4 service tickets usually point at a service account whose `msDS-SupportedEncryptionTypes` doesn't allow AES, or a password never reset since AES keys were introduced.
-
-## 20-GovernanceCoverage
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `access-review-definitions.csv` | Access review | `TargetType`, `TargetName`, `Recurrence`, `Reviewers`, `AutoApplyResults`, latest instance |
-| `access-review-latest-decisions.csv` | Review's latest instance | `Approved`, `Denied`, `NotReviewed`, `CompletionPct`, `ApplyFailed` |
-| `review-coverage.csv` | Target that should be reviewed | `TargetType`, `WhyInScope`, `Covered`, `CoveredBy` |
-| `access-packages.csv` | Access package | `AnyApprovalRequired`, `AnyReviewConfigured`, `AnyNoExpiration` |
-
-## 21-IdentityRisk
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `risky-users.csv` | Risky user | `RiskLevel`, `RiskState`, `DaysSinceUpdate`, `DirectoryRoles`, `Flags` |
-| `risk-detections.csv` | Detection | `RiskEventType`, `RiskLevel`, `DetectionTiming`, `IpAddress`, `IsAdmin` |
-| `risk-detections-by-type.csv` | Type + level | `Detections`, `DistinctUsers`, `AdminUsers` |
-| `risky-service-principals.csv` | Risky service principal | `RiskLevel`, `HoldsDirectoryRole` |
-| `ca-risk-policies.csv` | CA policy using risk | `State`, `UserRiskLevels`, `SignInRiskLevels`, `GrantControls` |
-
-## 22-PimRoleSettings
-
-| File | One row per | Key columns |
-|------|-------------|-------------|
-| `pim-role-settings.csv` | Directory role | `MaxActivationHours`, `ActivationRequiresMfa`, `ActivationRequiresAuthContext`, `ApprovalRequired`, `Approvers`, `PermanentEligibleAllowed`, `PermanentActiveAllowed`, assignment counts, `Flags` |
+[← Back to README](../README.md)

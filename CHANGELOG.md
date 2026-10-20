@@ -2,6 +2,17 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.3.0 - 2026-10-20
+
+Documentation restructure; no script changes.
+
+### Changed
+- README is now a short front door: script table, quick start, read-only guarantee, using the results, and a documentation index.
+- `docs/scripts/`: one page per script (collects, parameters, output files, permissions, pilot check, troubleshooting), with an index and previous / next links.
+- `docs/getting-started.md`: prerequisites, authentication, common parameters, every script with typical parameters, locked-down environments.
+- `docs/outputs.md`: now covers the run folder, dataset statuses and handling the output; per-script output tables moved to the script pages.
+- `docs/troubleshooting.md` and `docs/design-and-testing.md`: moved out of the README.
+
 ## 1.2.1 - 2026-10-20
 
 ### Added
