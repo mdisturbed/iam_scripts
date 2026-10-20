@@ -19,7 +19,8 @@ Every script starts at **Mock-tested**. Record progress in the sign-off table at
 1. Run `.\tools\Test-ReadOnly.ps1` and keep the output; it's the reviewer's evidence that nothing writes to the directory.
 2. Confirm the permissions in [permissions.md](permissions.md) are granted, and note any that aren't. Missing permissions show up as `Blocked` datasets, not failures.
 3. Choose the evidence location. Use `-OutputRoot` to point there so nothing lands next to the scripts.
-4. Run outside business-critical windows for the AD scripts that read every object (05, 07, 08, 12, 13).
+4. Run outside business-critical windows for the AD scripts that read every object (05, 07, 08, 12, 13, 18), and for 19, which queries every DC's Security log.
+5. Before running 18 or 19, tell the SOC. ACL enumeration and remote event log reads can look like reconnaissance to EDR / identity threat detection.
 
 ## Order
 
@@ -29,8 +30,10 @@ Start with the scripts that need the least setup and give the clearest known ans
 2. **04** AD privileged accounts, **05** AD group nesting
 3. **03** apps and consents, **10** guests, **12** stale accounts, **13** sync scope
 4. **07** role mining, **08** extension attributes
-5. **09** mail and sharing (needs Exchange access), **11** Azure RBAC (needs Azure Reader)
-6. **06** JML timing, **14** IGA reconciliation, **15** rule-managed access (need input files)
+5. **16** device posture, **21** identity risk, **22** PIM settings, **20** governance coverage
+6. **18** AD delegation, **19** DC authentication protocols (needs Event Log Readers)
+7. **09** mail and sharing (needs Exchange access), **11** Azure RBAC (needs Azure Reader), **17** AWS (needs the read-only role in each account)
+8. **06** JML timing, **14** IGA reconciliation, **15** rule-managed access (need input files)
 
 ## What to check for every run
 
@@ -62,6 +65,13 @@ Pick one or two facts per script that you can confirm independently in the porta
 | 13 Sync scope | Last sync time in Entra Connect Health or the portal; one OU you know is excluded shows `OutOfScope` |
 | 14 IGA reconciliation | `iga-input-profile.csv` systems and status values look right; one account you know was created outside the IGA appears |
 | 15 Rule-managed access | `role-definition-check.csv` has no unexpected issues; one user you know moved shows `RoleDrift` (once the attribute is in use) |
+| 16 Device posture | Device counts by join type vs Entra > Devices; one known non-compliant device in Intune |
+| 17 AWS IAM | Root MFA status in one account's IAM dashboard; one known cross-account role's trust policy |
+| 18 AD delegation | One delegation you know exists (e.g. helpdesk reset-password on a user OU) appears with the right OU and trustee |
+| 19 DC auth protocols | `LogStartsUtc` matches the oldest event in Event Viewer on one DC; one known NTLM application server appears |
+| 20 Governance coverage | Number of access reviews in Identity Governance; one app you know is reviewed shows `Covered` |
+| 21 Identity risk | Risky user count in Entra ID Protection > Risky users |
+| 22 PIM role settings | Global Administrator settings in PIM > Entra roles > Settings |
 
 ## Tuning on first run
 
@@ -75,6 +85,10 @@ Expect to adjust these on the first run and record the values used. They're writ
 | 07 | `-GroupingAttributes` (add the job-code attribute), `-MinPopulation`, thresholds |
 | 08 | `-AdditionalAttributes`, `-SampleValueCount 0` if values are sensitive |
 | 12, 13 | `-AnchorAttribute` if Entra Connect uses `mS-DS-ConsistencyGuid` |
+| 17 | `-Region`, `-IdentityCenterRegion`, `-AssumeRoleName` |
+| 19 | `-Hours` to fit how much Security log the DCs hold |
+| 20 | `-InScopeAppsCsv` once the certification scope list exists |
+| 22 | `-MaxActivationHours` to match the agreed standard |
 | 14 | Column names, `-SystemName`, status value lists |
 
 ## Reporting a problem
@@ -116,3 +130,10 @@ When a script is pilot-verified, hand it over with:
 | 13 Hybrid sync scope | 1.0.0 | | | | | Mock-tested |
 | 14 IGA reconciliation | 1.0.0 | | | | | Mock-tested |
 | 15 Rule-managed access | 1.0.0 | | | | | Mock-tested |
+| 16 Device posture | 1.0.0 | | | | | Mock-tested |
+| 17 AWS IAM posture | 1.0.0 | | | | | Mock-tested |
+| 18 AD delegation | 1.0.0 | | | | | Mock-tested |
+| 19 DC auth protocols | 1.0.0 | | | | | Mock-tested |
+| 20 Governance coverage | 1.0.0 | | | | | Mock-tested |
+| 21 Identity risk | 1.0.0 | | | | | Mock-tested |
+| 22 PIM role settings | 1.0.0 | | | | | Mock-tested |

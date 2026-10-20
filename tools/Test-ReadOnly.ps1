@@ -19,7 +19,7 @@
     .\tools\Test-ReadOnly.ps1 -Path .\scripts\03-Get-AppsAndConsents.ps1
 
 .NOTES
-    Version: 1.1.0. Exit code 0 = pass, 1 = findings.
+    Version: 1.2.0. Exit code 0 = pass, 1 = findings.
 #>
 [CmdletBinding()]
 param([string[]]$Path = @())
@@ -27,7 +27,8 @@ param([string[]]$Path = @())
 if (-not $Path -or $Path.Count -eq 0) { $Path = @(Get-ChildItem -Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'scripts') -Filter *.ps1 | Select-Object -ExpandProperty FullName) }
 
 # Commands that write only to the local evidence folder or console, or control flow.
-$LocalOnlyAllowed = @('New-Item', 'Set-Content', 'Add-Content', 'Add-Member', 'Start-Sleep', 'Export-Csv', 'Connect-MgGraph', 'Import-Module', 'Import-Csv')
+# Use-STSRole only returns temporary credentials for a read-only AWS role; it changes nothing.
+$LocalOnlyAllowed = @('New-Item', 'Set-Content', 'Add-Content', 'Add-Member', 'Start-Sleep', 'Export-Csv', 'Connect-MgGraph', 'Import-Module', 'Import-Csv', 'Use-STSRole')
 $ReadVerbs = @('Get', 'Select', 'Where', 'ForEach', 'Sort', 'Group', 'Measure', 'Join', 'Split', 'Test', 'ConvertTo', 'ConvertFrom', 'Out', 'Format', 'Write', 'Resolve', 'Expand', 'Compare', 'Export', 'Import', 'Connect', 'Find')
 $Forbidden = @('Invoke-RestMethod', 'Invoke-WebRequest', 'Invoke-Expression', 'Start-Process', 'Invoke-Command', 'Invoke-Item')
 

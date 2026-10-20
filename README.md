@@ -1,10 +1,10 @@
 # IAM Discovery Scripts
 
-Read-only PowerShell scripts that collect evidence for an identity and access management (IAM) gap analysis across **Microsoft Entra ID**, **on-premises Active Directory**, **Exchange Online / SharePoint** and **Azure**.
+Read-only PowerShell scripts that collect evidence for an identity and access management (IAM) gap analysis across **Microsoft Entra ID**, **on-premises Active Directory**, **Intune**, **Exchange Online / SharePoint**, **Azure** and **AWS**.
 
 Each script measures one gap, writes timestamped CSVs plus a run manifest, and can be rerun after remediation to show progress against the same baseline. The output is designed to stand up as audit evidence (for example in a HITRUST, NIST or CIS assessment): every run records who ran it, from where, when, with which permissions, and a SHA-256 hash of every file it produced.
 
-> **Nothing in these scripts changes anything.** Graph calls go through one function that only sends HTTP `GET`; Azure Resource Manager calls go through one function that only sends `GET`; AD, Exchange and SharePoint work uses only `Get-*` cmdlets. [`tools/Test-ReadOnly.ps1`](tools/Test-ReadOnly.ps1) proves this statically, without running anything, so a reviewer can confirm it in seconds.
+> **Nothing in these scripts changes anything.** Graph calls go through one function that only sends HTTP `GET`; Azure Resource Manager calls go through one function that only sends `GET`; AD, Exchange, SharePoint, event log and AWS work uses only `Get-*` cmdlets. [`tools/Test-ReadOnly.ps1`](tools/Test-ReadOnly.ps1) proves this statically, without running anything, so a reviewer can confirm it in seconds.
 
 > **Test status:** every script is **mock-tested** (see [Testing](#testing)). Before handing a script to others, run it once yourself in the target environment and check it against known answers using the [pilot runbook](docs/pilot-runbook.md).
 
@@ -19,11 +19,14 @@ Each script measures one gap, writes timestamped CSVs plus a run manifest, and c
 - [Authentication](#authentication)
 - [Common parameters](#common-parameters)
 - [The scripts](#the-scripts)
-  - Entra: [01 MFA coverage](#01---mfa-coverage) · [02 Privileged access](#02---entra-privileged-access) · [03 Apps and consents](#03---apps-and-consents) · [10 Guests](#10---guest-access)
-  - AD: [04 Privileged and service accounts](#04---ad-privileged-and-service-accounts) · [05 Group nesting](#05---ad-group-nesting) · [07 Role mining](#07---role-mining)
+  - Entra: [01 MFA coverage](#01---mfa-coverage) · [02 Privileged access](#02---entra-privileged-access) · [03 Apps and consents](#03---apps-and-consents) · [10 Guests](#10---guest-access) · [21 Identity risk](#21---identity-risk) · [22 PIM role settings](#22---pim-role-settings)
+  - AD: [04 Privileged and service accounts](#04---ad-privileged-and-service-accounts) · [05 Group nesting](#05---ad-group-nesting) · [07 Role mining](#07---role-mining) · [18 Delegation and ACLs](#18---ad-delegation) · [19 NTLM / Kerberos usage](#19---dc-authentication-protocols)
   - Hybrid: [08 Extension attributes](#08---extension-attribute-inventory) · [12 Stale accounts](#12---stale-accounts) · [13 Sync scope](#13---hybrid-sync-scope)
+  - Devices: [16 Device posture](#16---device-posture)
   - Microsoft 365: [09 Mail forwarding and sharing](#09---mail-forwarding-and-external-sharing)
   - Azure: [11 Azure RBAC](#11---azure-rbac)
+  - AWS: [17 AWS IAM posture](#17---aws-iam-posture)
+  - Governance: [20 Access review coverage](#20---governance-coverage)
   - Lifecycle and governance: [06 JML timing](#06---jml-timing) · [14 IGA reconciliation](#14---iga-reconciliation) · [15 Rule-managed access](#15---rule-managed-access)
 - [Output and evidence](#output-and-evidence)
 - [Dataset statuses](#dataset-statuses)
@@ -57,6 +60,13 @@ Each script measures one gap, writes timestamped CSVs plus a run manifest, and c
 | 13 | [`13-Get-HybridSyncScope.ps1`](scripts/13-Get-HybridSyncScope.ps1) | What actually syncs from AD to Entra, and where do they disagree? | AD + Entra | 1.0.0 |
 | 14 | [`14-Compare-IgaToDirectory.ps1`](scripts/14-Compare-IgaToDirectory.ps1) | Where does the IGA platform's view of accounts and group access differ from AD? | AD + IGA export | 1.0.0 |
 | 15 | [`15-Test-RuleManagedAccess.ps1`](scripts/15-Test-RuleManagedAccess.ps1) | Are applied roles, HR-expected roles and actual group membership in step? | AD + role files | 1.0.0 |
+| 16 | [`16-Get-DevicePosture.ps1`](scripts/16-Get-DevicePosture.ps1) | Are devices joined, managed and compliant, and does Conditional Access rely on it? | Entra + Intune | 1.0.0 |
+| 17 | [`17-Get-AwsIamPosture.ps1`](scripts/17-Get-AwsIamPosture.ps1) | Which AWS users, keys, roles, trusts and permission sets exist, and which are risky? | AWS | 1.0.0 |
+| 18 | [`18-Get-ADDelegation.ps1`](scripts/18-Get-ADDelegation.ps1) | Who has dangerous rights through AD permissions (ACLs), not group membership? | AD | 1.0.0 |
+| 19 | [`19-Get-DcAuthProtocolUsage.ps1`](scripts/19-Get-DcAuthProtocolUsage.ps1) | Who still uses NTLM (v1 especially) or RC4/DES Kerberos? | DC event logs | 1.0.0 |
+| 20 | [`20-Get-GovernanceCoverage.ps1`](scripts/20-Get-GovernanceCoverage.ps1) | What share of apps, groups and roles is actually covered by access reviews? | Entra ID Governance | 1.0.0 |
+| 21 | [`21-Get-IdentityRisk.ps1`](scripts/21-Get-IdentityRisk.ps1) | Who is at risk right now, and does Conditional Access act on risk? | Entra ID Protection | 1.0.0 |
+| 22 | [`22-Get-PimRoleSettings.ps1`](scripts/22-Get-PimRoleSettings.ps1) | What does it actually take to activate each admin role? | Entra PIM | 1.0.0 |
 
 The scripts gather facts. They do not score maturity or recommend fixes; that interpretation belongs in the analysis that uses the evidence.
 
@@ -67,7 +77,7 @@ iam_scripts/
 ├── README.md                     this file
 ├── CHANGELOG.md                  version history
 ├── .gitignore                    blocks evidence, keys and data exports from being committed
-├── scripts/                      the fifteen discovery scripts (self-contained, run independently)
+├── scripts/                      the twenty-two discovery scripts (self-contained, run independently)
 ├── tools/
 │   └── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
 ├── examples/                     placeholder input templates for scripts 06, 14 and 15
@@ -104,11 +114,22 @@ iam_scripts/
 .\scripts\12-Get-StaleAccounts.ps1               -IncludeComputers -OutputRoot D:\Evidence
 .\scripts\13-Get-HybridSyncScope.ps1             -IncludeGroups -OutputRoot D:\Evidence
 
-# 5. Microsoft 365 and Azure
+# 5. Microsoft 365, Azure, devices, governance
 .\scripts\09-Get-MailForwardingAndSharing.ps1 -OutputRoot D:\Evidence
 .\scripts\11-Get-AzureRbac.ps1                -OutputRoot D:\Evidence
+.\scripts\16-Get-DevicePosture.ps1            -OutputRoot D:\Evidence
+.\scripts\20-Get-GovernanceCoverage.ps1       -IncludeDecisionStats -OutputRoot D:\Evidence
+.\scripts\21-Get-IdentityRisk.ps1             -OutputRoot D:\Evidence
+.\scripts\22-Get-PimRoleSettings.ps1          -OutputRoot D:\Evidence
 
-# 6. Need input files (templates in .\examples)
+# 6. AD permissions and legacy authentication
+.\scripts\18-Get-ADDelegation.ps1             -OutputRoot D:\Evidence
+.\scripts\19-Get-DcAuthProtocolUsage.ps1      -Hours 24 -OutputRoot D:\Evidence
+
+# 7. AWS (credential profile, or a read-only role in every account)
+.\scripts\17-Get-AwsIamPosture.ps1 -ProfileName audit -AllOrganizationAccounts -AssumeRoleName IAMDiscoveryReadOnly -IncludeIdentityCenter -OutputRoot D:\Evidence
+
+# 8. Need input files (templates in .\examples)
 .\scripts\06-Compare-JmlTiming.ps1        -HrCsvPath .\hr-export.csv -OutputRoot D:\Evidence
 .\scripts\14-Compare-IgaToDirectory.ps1   -AccountsCsv .\iga-accounts.csv -AssignmentsCsv .\iga-assignments.csv -OutputRoot D:\Evidence
 .\scripts\15-Test-RuleManagedAccess.ps1   -RoleDefinitionCsv .\roles.csv -RuleMapCsv .\rule-map.csv -OutputRoot D:\Evidence
@@ -126,15 +147,18 @@ Start with `summary.csv` in each run folder.
 | Need | Scripts | Notes |
 |------|---------|-------|
 | PowerShell 5.1 or 7.x | All | Written for both; tested on 7.4 |
-| `Microsoft.Graph.Authentication` | 01, 02, 03, 10, 11, 12, 13; 06 / 08 / 09 optionally | The only Graph module needed; all calls are raw `GET` requests |
-| RSAT `ActiveDirectory` | 04, 05, 06, 07, 08, 12, 13, 14, 15 | Read access with a standard domain account is normally enough |
+| `Microsoft.Graph.Authentication` | 01, 02, 03, 10, 11, 12, 13, 16, 20, 21, 22; 06 / 08 / 09 optionally | The only Graph module needed; all calls are raw `GET` requests |
+| RSAT `ActiveDirectory` | 04, 05, 06, 07, 08, 12, 13, 14, 15, 18, 19 | Read access with a standard domain account is normally enough |
 | `ExchangeOnlineManagement` v3 | 09 | Uses `Get-EXOMailbox` / `Get-EXORecipient` |
 | `Microsoft.Online.SharePoint.PowerShell` | 09 with `-IncludeSiteSharing` | Windows PowerShell 5.1 |
 | `Az.Accounts` | 11 | Only `Connect-AzAccount`, `Get-AzContext` and `Invoke-AzRestMethod -Method GET` |
+| AWS Tools for PowerShell | 17 | `AWS.Tools.Common`, `.SecurityToken`, `.IdentityManagement`; plus `.Organizations`, `.SSOAdmin`, `.IdentityStore`, `.AccessAnalyzer` for the optional parts |
+| Windows + remote event log access | 19 | `Get-WinEvent` against each DC (RPC) |
 
 ```powershell
 # If policy allows installing modules:
 Install-Module Microsoft.Graph.Authentication, ExchangeOnlineManagement, Az.Accounts -Scope CurrentUser
+Install-Module AWS.Tools.Common, AWS.Tools.SecurityToken, AWS.Tools.IdentityManagement, AWS.Tools.Organizations, AWS.Tools.SSOAdmin, AWS.Tools.IdentityStore, AWS.Tools.AccessAnalyzer -Scope CurrentUser
 Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0
 ```
 
@@ -144,11 +168,15 @@ If installs are blocked, Azure Cloud Shell in the tenant includes the Graph, Exc
 
 | Need | Scripts |
 |------|---------|
-| Entra **Global Reader** (preferred) | 01, 02, 03, 10, 12, 13, 08 / 09 Graph parts |
+| Entra **Global Reader** (preferred) | 01, 02, 03, 10, 12, 13, 16, 20, 22, 08 / 09 Graph parts |
+| Entra **Security Reader** (or Global Reader) | 21 |
+| Intune **Read Only Operator** (or Global Reader) | 16 |
 | Exchange: Global Reader or View-Only Organization Management | 09 |
 | Azure **Reader** at the root management group, or on each subscription | 11 |
+| AWS **SecurityAudit + ViewOnlyAccess** in each account (role deployed by StackSet); IAM Identity Center read | 17 |
+| **Event Log Readers** on domain controllers | 19 |
 | Entra ID P1 | Sign-in activity (01, 02, 03, 06, 10, 12) |
-| Entra ID P2 / ID Governance | PIM eligibility (02, 11) |
+| Entra ID P2 / ID Governance | PIM eligibility (02, 11), access reviews (20), risk data (21), PIM settings (22) |
 
 Scope-by-scope detail is in [docs/permissions.md](docs/permissions.md). Missing access doesn't crash a script; the affected dataset is marked `Blocked` or `EvidenceUnavailable`.
 
@@ -450,6 +478,141 @@ If neither a regex nor a tag is given, the groups in the role definition file ar
 
 **Start with:** `role-definition-check.csv` (fix any issues first), then `summary.csv` and `drift-detail.csv`.
 
+### 16 - Device posture
+
+Zero Trust device controls only work if devices are registered, managed and evaluated.
+
+**Collects:**
+- **Entra device objects:** join type (Entra joined, hybrid joined, registered), managed, compliant and last sign-in, with flags for stale, unmanaged and non-compliant devices.
+- **Intune managed devices:** compliance state, last check-in, encryption, jailbreak status, and whether each has a matching Entra object.
+- **Compliance policies:** each policy and its assignments, plus the tenant setting that decides whether a device with *no* policy counts as compliant.
+- **Conditional Access policies that depend on devices:** those requiring a compliant or hybrid-joined device, using device filters, or targeting platforms.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-StaleDays` | `90` | Entra devices with no sign-in in this window are flagged |
+| `-CheckInStaleDays` | `30` | Intune devices not checked in for this long are flagged |
+| `-SkipIntune` | off | Entra devices and CA only |
+
+**Start with:** `summary.csv`. The "devices with no policy treated as compliant" line matters: if it's True, an unassigned device passes a require-compliant-device control.
+
+### 17 - AWS IAM posture
+
+The AWS side of privileged and non-human identity sprawl.
+
+**Collects, per account:**
+- **Account summary:** root MFA, root access keys, password policy and SAML providers.
+- **IAM users:** console access, MFA, groups and policies, and last activity.
+- **Access keys:** age and last use, with key IDs truncated.
+- **IAM roles:** trust principals, flagged when they are cross-account (with or without a condition), wildcard, SAML-federated or web-identity; plus admin policies and last use.
+- **Access Analyzer:** active external-access findings.
+
+**Collects from Identity Center:** permission sets (session length, managed and inline policies, admin flag), and every account assignment with the user or group resolved by name.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-ProfileName` | default credential chain | AWS credential profile |
+| `-Region` | `us-east-1` | Region for regional APIs (Access Analyzer, Identity Center) |
+| `-AllOrganizationAccounts` | off | Read every account in the Organization |
+| `-AccountIds` | none | Read specific extra accounts |
+| `-AssumeRoleName` | none | Read-only role deployed in each account (needed for other accounts) |
+| `-IncludeIdentityCenter` | off | Permission sets and assignments |
+| `-IdentityCenterRegion` | `-Region` | Region where Identity Center lives |
+| `-SkipAccessAnalyzer` | off | Skip Access Analyzer findings |
+| `-KeyAgeDays` / `-StaleDays` | `90` / `90` | Key age and inactivity thresholds |
+
+**Start with:** `summary.csv` (root MFA and root keys first), then `aws-iam-roles.csv` filtered on `CrossAccountNoCondition` and `WildcardPrincipal`. `Use-STSRole` is used only to get temporary credentials for the read-only role.
+
+### 18 - AD delegation
+
+Group membership (script 04) is only half of privileged access. Accounts and groups holding dangerous rights through **ACLs** are effectively admins too, and they're often forgotten.
+
+**Collects:** explicit permissions on the domain root, AdminSDHolder, the Domain Controllers OU, every OU and the protected groups, held by **non-default** trustees. The rights reported are:
+- full control, modify permissions, take ownership and write all properties
+- reset password, write members, write SPN, write key credential (shadow credentials) and write RBCD
+- all extended rights, DCSync and read LAPS password
+
+Each row has a severity: Critical on Tier 0 objects or for DCSync. The script also lists objects with a non-default owner, and gives a per-trustee summary. GUIDs are resolved from this forest's schema, so forest-specific attributes like the LAPS password are named correctly.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-SkipOUs` | off | Tier 0 targets only |
+| `-AdditionalTargets` | none | Extra DNs to review |
+| `-IncludeInherited` | off | Also report inherited ACEs (noisy) |
+| `-IncludeLowSeverity` | off | Include create / delete child object rights |
+
+**Start with:** `summary.csv`, then `ad-delegations.csv` sorted by severity. Expand group trustees with script 04 or 05 to see who actually holds the rights.
+
+### 19 - DC authentication protocols
+
+Shows what would break, and who is still exposed, before NTLM is restricted or RC4 is disabled.
+
+**Collects** from each domain controller's Security log over a time window:
+- **NTLM logons (4624):** split into NTLM V1 and V2, by account, workstation and IP.
+- **NTLM credential validations (4776).**
+- **Kerberos tickets with weak encryption:** TGTs (4768) and service tickets (4769) issued with RC4 or DES, by account, service and IP.
+- **Per-DC read status:** including where each Security log actually starts.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-DomainControllers` | all DCs | Limit to listed DCs |
+| `-Hours` | `24` | Window to read (1-720) |
+| `-MaxEventsPerQuery` | `50000` | Safety cap per DC per query |
+| `-SkipKerberos` / `-SkipNtlmValidation` | off | Skip parts (4776 is often high-volume) |
+
+**Start with:** `dc-read-status.csv` (was every DC readable, and how much log did it hold?), then `ntlm-logons.csv`, where NTLM V1 rows are listed first. If auditing isn't enabled the counts are zero, so check the status file before concluding there's no usage. For longer history, query the SIEM.
+
+### 20 - Governance coverage
+
+Answers "what share of the things that should be certified actually are?"
+
+**Collects:**
+- **Access review definitions:** target, reviewers, recurrence, auto-apply setting and the latest instance.
+- **Decision statistics** (optional): approved, denied and not reviewed counts, completion %, and how many decisions failed to apply.
+- **Coverage list:** every enterprise app requiring assignment, role-assignable group, group containing guests and Tier 0 directory role, each marked Covered or NotCovered by a recurring review. Your own in-scope application list can be checked too.
+- **Access packages:** approval, expiration and built-in review settings.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-IncludeDecisionStats` | off | Read decisions on each review's latest instance |
+| `-SkipGuestGroups` | off | Skip finding groups that contain guests (one call per guest) |
+| `-InScopeAppsCsv` | none | CSV with `AppName` and/or `AppId` columns: the certification scope list |
+
+**Start with:** `summary.csv` (coverage % by type), then `review-coverage.csv` filtered on `Covered = False`.
+
+### 21 - Identity risk
+
+**Collects:**
+- **Users currently at risk:** flagged when they hold a directory role or when their risk has been left open for 30+ days.
+- **Risk detections:** over a lookback window, with an aggregate by detection type.
+- **Risky service principals:** marked `EvidenceUnavailable` without Workload Identities Premium.
+- **Conditional Access policies that act on user or sign-in risk.**
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-DetectionLookbackDays` | `30` | Days of detections (1-90) |
+| `-IncludeRemediated` | off | Include remediated / dismissed users |
+| `-SkipServicePrincipals` | off | Skip workload identity risk |
+
+**Start with:** `summary.csv`, then `risky-users.csv`, where risky admins are listed first. Legacy Identity Protection risk policies (outside CA) aren't exposed by Graph; check the portal if CA shows none.
+
+### 22 - PIM role settings
+
+PIM only reduces risk if activation is hard enough. For every directory role this exports what activation requires:
+- maximum duration
+- MFA, justification and ticket number
+- approval and the approvers
+- authentication context
+
+It also shows whether eligible or active assignments can be permanent, with assignment counts. Tier 0 roles are flagged when activation has no approval, has no MFA or authentication context, lasts longer than the threshold, or permanent assignment is allowed.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-MaxActivationHours` | `8` | Longer Tier 0 activation is flagged |
+| `-OnlyAssignedRoles` | off | Skip roles nobody holds |
+
+**Start with:** `pim-role-settings.csv`, with Tier 0 roles listed first. Covers directory roles only; PIM for Groups and Azure resource roles are configured per group or scope.
+
 ## Output and evidence
 
 ```
@@ -483,7 +646,7 @@ If neither a regex nor a tag is given, the groups in the role definition file ar
 
 1. **One Graph entry point.** All Graph traffic goes through `Invoke-GraphGet`, which calls `Invoke-MgGraphRequest -Method GET`.
 2. **One Azure entry point.** All ARM traffic in script 11 goes through `Invoke-ArmGet`, which calls `Invoke-AzRestMethod -Method GET`.
-3. **Read cmdlets only** for AD (`Get-AD*`), Exchange (`Get-EXO*`, `Get-InboxRule`, `Get-TransportRule`, …) and SharePoint (`Get-SPOSite`).
+3. **Read cmdlets only** for AD (`Get-AD*`), Exchange (`Get-EXO*`, `Get-InboxRule`, `Get-TransportRule`, …), SharePoint (`Get-SPOSite`), event logs (`Get-WinEvent`) and AWS (`Get-IAM*`, `Get-SSOADMN*`, `Get-ORG*`, …). In script 17, `Use-STSRole` only obtains temporary credentials for a read-only role; it's the one non-`Get` command on the checker's allowlist.
 4. **Read scopes only** are requested at sign-in.
 5. **Static proof.** [`tools/Test-ReadOnly.ps1`](tools/Test-ReadOnly.ps1) parses each script with the PowerShell AST, without running it, and fails on:
    - any state-changing verb (`New-`, `Set-`, `Remove-`, `Add-`, `Update-`, `Enable-`, `Disable-`, `Grant-`, `Revoke-`, …) outside a short allowlist of commands that only write the local evidence folder
@@ -522,9 +685,13 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 | Goal | Scripts |
 |------|---------|
 | MFA coverage | 01 |
-| Privileged and service account sprawl | 02, 04, 11 |
+| Privileged and service account sprawl | 02, 04, 11, 17, 18, 22 |
 | "Where is my data going" | 03, 09, 10 |
-| Stale and orphaned identities | 12, 13, 06 |
+| Stale and orphaned identities | 12, 13, 06, 10 |
+| Devices and Conditional Access | 16, 01, 21 |
+| AD attack paths and legacy protocols | 18, 19, 04 |
+| AWS identity | 17 |
+| Certification coverage and PIM hardening | 20, 22 |
 | Current lifecycle and governance baseline | 06, 14 |
 | Groups and RBAC design | 05, 07, 08 |
 | After rule-based access goes live | 15 (scheduled), 06 and 12 (rerun) |
@@ -553,6 +720,13 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 | Script 14: `No account rows match System` | `-SystemName` doesn't match the export | Check "Systems seen" in `iga-input-profile.csv` |
 | Script 14: many `UnmappedIgaStatus` rows | Status values not in the lists | Extend `-ActiveStatusValues` / `-InactiveStatusValues` |
 | Script 15: everyone shows drift | Applied-roles attribute not yet populated, or wrong attribute | Check `-AppliedRolesAttribute` with script 08 |
+| Script 16: Intune datasets `Blocked` | No Intune read role / scope | Intune Read Only Operator, `DeviceManagementManagedDevices.Read.All` |
+| Script 17: an account shows `Blocked: AccessDenied` | Read-only role missing or not trusted from the run account | Deploy the role (StackSet) and allow the run account to assume it |
+| Script 17: no Access Analyzer findings | No external-access analyzer in that region | Create one (outside this script), or set `-Region` |
+| Script 18: many `(unresolved)` trustees | Deleted accounts or groups still in ACLs | These are clean-up items; confirm the SID is gone |
+| Script 19: all counts zero | Auditing not enabled, or log rolled over | Check `dc-read-status.csv` (`LogStartsUtc`) and audit policy; use the SIEM |
+| Script 19: DC rows `Blocked` | Not in Event Log Readers, or RPC blocked | Request Event Log Readers on DCs; check firewall to DCs |
+| Scripts 20-22: datasets `EvidenceUnavailable` | No Entra ID P2 / ID Governance | Record as a finding |
 | Execution policy blocks a script | Local policy | `Unblock-File`, or follow the approved signing process |
 
 ## Design choices
@@ -569,8 +743,8 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 Before release, every script was:
 
 - parse-checked and linted with PSScriptAnalyzer (no errors or warnings outside documented exclusions)
-- checked with `Test-ReadOnly.ps1`, including negative tests confirming it catches write cmdlets, non-GET Graph calls and non-GET ARM calls
-- run end to end on PowerShell 7.4 against mocked Graph, AD, Exchange Online, SharePoint and Azure Resource Manager responses using placeholder data, including paging, missing licences, permission failures, deleted principals, circular nesting, case variants, expired credentials, missing schema attributes and every optional switch
+- checked with `Test-ReadOnly.ps1`, including negative tests confirming it catches write cmdlets (AD, Exchange, Azure), non-GET Graph calls and non-GET ARM calls
+- run end to end on PowerShell 7.4 against mocked Graph, AD (including ACLs), Intune, Exchange Online, SharePoint, Azure Resource Manager, AWS and domain controller event log responses using placeholder data, including paging, missing licences, permission failures, deleted principals, circular nesting, case variants, expired credentials, missing schema attributes, accounts that can't be assumed, unreadable DCs and every optional switch
 
 Results were checked against the values the mock data should produce, not only for "no errors". This caught and fixed real defects before release (see [CHANGELOG.md](CHANGELOG.md)).
 

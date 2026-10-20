@@ -2,6 +2,29 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.2.0 - 2026-10-20
+
+Fills the gaps found when mapping the discovery access matrix against the scripts.
+
+### Added
+- `16-Get-DevicePosture.ps1` (1.0.0): Entra device join / management / compliance, Intune compliance and check-in, compliance policy assignment and the no-policy setting, CA policies that rely on device state.
+- `17-Get-AwsIamPosture.ps1` (1.0.0): AWS root MFA and keys, IAM users and access keys, role trusts (cross-account, wildcard, SAML), Access Analyzer external-access findings, IAM Identity Center permission sets and assignments; multi-account through a read-only role.
+- `18-Get-ADDelegation.ps1` (1.0.0): dangerous ACL rights on the domain root, AdminSDHolder, DC OU, OUs and protected groups held by non-default trustees (incl. DCSync, reset password, write members, shadow credentials, RBCD, LAPS read), non-default owners, per-trustee view.
+- `19-Get-DcAuthProtocolUsage.ps1` (1.0.0): NTLM v1 / v2 logons, NTLM validations and RC4 / DES Kerberos tickets from DC Security logs, with the window each DC's log actually covers.
+- `20-Get-GovernanceCoverage.ps1` (1.0.0): access review definitions and decision statistics, coverage of apps / groups / Tier 0 roles, optional in-scope application list, access packages.
+- `21-Get-IdentityRisk.ps1` (1.0.0): risky users (admins first), risk detections, risky service principals, CA risk policies.
+- `22-Get-PimRoleSettings.ps1` (1.0.0): PIM activation requirements and permanent-assignment settings per directory role, with Tier 0 flags.
+- Docs: README sections, permissions (AWS and event log sections), outputs, pilot runbook checks and sign-off rows for 16-22.
+
+### Changed
+- `tools/Test-ReadOnly.ps1` 1.2.0: `Use-STSRole` added to the allowlist (returns temporary credentials for a read-only AWS role; changes nothing).
+
+### Found and fixed during testing (before release)
+- 18: schema and extended-right GUID lookups were shared, but some GUIDs are identical (`member` / Self-Membership, `servicePrincipalName` / Validated-SPN), which would have mislabeled write-members rights. Now kept separate.
+- 18: builtin operator groups were reported as unresolved trustees.
+- 19: covered window is now taken from where each DC's Security log starts, not from the oldest matching event.
+- 20: decision apply failures with "Failure" in the result were not counted.
+
 ## 1.1.0 - 2026-10-20
 
 ### Added

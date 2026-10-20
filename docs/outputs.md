@@ -180,3 +180,75 @@ Tier 0 roles are listed at the top of the script and can be extended.
 | `drift-detail.csv` | Difference | `Type` (MissingGroup / ExtraRuleGroup / RoleToAdd / RoleToRemove) |
 
 **Reading it:** `RolesToAdd` / `RolesToRemove` mean the user's HR attributes changed but the applied roles didn't, which is a mover the automation didn't process. `ExtraRuleGroups` means someone was added to a rule-managed group by hand, or kept it from an old role.
+
+## 16-DevicePosture
+
+| File | One row per | Key columns |
+|------|-------------|-------------|
+| `entra-devices.csv` | Entra device object | `JoinType`, `IsManaged`, `IsCompliant`, `LastSignInUtc`, `Flags` |
+| `intune-devices.csv` | Intune managed device | `ComplianceState`, `LastCheckInUtc`, `IsEncrypted`, `HasEntraObject`, `Flags` |
+| `compliance-policies.csv` | Compliance policy | `Platform`, `AssignmentCount`, `Unassigned` |
+| `ca-device-requirements.csv` | CA policy that uses device state | `RequiresCompliantDevice`, `RequiresHybridJoined`, `DeviceFilterRule`, `IncludePlatforms`, `State` |
+
+**Reading it:** a require-compliant-device policy only protects as far as devices are enrolled and evaluated. Unmanaged enabled devices can't pass it, and an unassigned device passes it if the tenant treats devices with no policy as compliant.
+
+## 17-AwsIamPosture
+
+| File | One row per | Key columns |
+|------|-------------|-------------|
+| `aws-accounts.csv` | Account | `ReadStatus`, `RootMfaEnabled`, `RootAccessKeysPresent`, `PasswordPolicy` |
+| `aws-iam-users.csv` | IAM user | `ConsoleAccess`, `MfaDevices`, `AttachedPolicies`, `InlinePolicies`, `DaysSinceActivity`, `Flags` |
+| `aws-access-keys.csv` | Access key | `AgeDays`, `LastUsedUtc`, `LastUsedService`, `Flags` (key ID truncated) |
+| `aws-iam-roles.csv` | IAM role | `TrustedPrincipals`, `CrossAccountIds`, `AttachedPolicies`, `LastUsedUtc`, `Flags` |
+| `aws-saml-providers.csv` | SAML provider | `ValidUntilUtc` |
+| `aws-access-analyzer-findings.csv` | Active external-access finding | `ResourceType`, `Resource`, `Principal`, `IsPublic` |
+| `aws-identity-center-permission-sets.csv` | Permission set | `SessionDuration`, `ManagedPolicies`, `InlineWildcard`, `IsAdminSet` |
+| `aws-identity-center-assignments.csv` | Assignment | `PermissionSet`, `AccountId`, `PrincipalType`, `PrincipalName`, `Flags` |
+
+**Reading it:** `AdminAccess` means AdministratorAccess, IAMFullAccess or PowerUserAccess is attached directly or through a group. `CrossAccountNoCondition` trusts another account without an ExternalId or source condition.
+
+## 18-ADDelegation
+
+| File | One row per | Key columns |
+|------|-------------|-------------|
+| `ad-delegations.csv` | Risky right held by a non-default trustee on a target | `Target`, `Tier`, `Trustee`, `Right`, `AppliesTo`, `AppliesToObjects`, `Severity` |
+| `ad-nondefault-owners.csv` | Target with a non-default owner | `Owner`, `Severity` |
+| `ad-delegation-by-trustee.csv` | Trustee | `HighestSeverity`, `Rights`, `Tier0Targets`, `OUTargets` |
+
+**Reading it:** severity is Critical for any right on a Tier 0 object (domain root, AdminSDHolder, DC OU, protected groups) and for DCSync anywhere. `AppliesToObjects` shows which object class an OU-level right applies to (e.g. ResetPassword on `user`).
+
+## 19-DcAuthProtocols
+
+| File | One row per | Key columns |
+|------|-------------|-------------|
+| `dc-read-status.csv` | DC + query | `Status`, `EventsRead`, `CappedAtMax`, `LogStartsUtc`, `HoursCovered` |
+| `ntlm-logons.csv` | NTLM version + account + source | `NtlmVersion`, `Account`, `SourceWorkstation`, `SourceIp`, `Count`, first / last seen |
+| `ntlm-validations.csv` | Account + workstation + status | `Count`, `Status` |
+| `kerberos-weak-encryption.csv` | Account + service + encryption + client | `RequestType`, `Encryption`, `Count` |
+
+**Reading it:** NTLM V1 should be zero. RC4 service tickets usually point at a service account whose `msDS-SupportedEncryptionTypes` doesn't allow AES, or a password never reset since AES keys were introduced.
+
+## 20-GovernanceCoverage
+
+| File | One row per | Key columns |
+|------|-------------|-------------|
+| `access-review-definitions.csv` | Access review | `TargetType`, `TargetName`, `Recurrence`, `Reviewers`, `AutoApplyResults`, latest instance |
+| `access-review-latest-decisions.csv` | Review's latest instance | `Approved`, `Denied`, `NotReviewed`, `CompletionPct`, `ApplyFailed` |
+| `review-coverage.csv` | Target that should be reviewed | `TargetType`, `WhyInScope`, `Covered`, `CoveredBy` |
+| `access-packages.csv` | Access package | `AnyApprovalRequired`, `AnyReviewConfigured`, `AnyNoExpiration` |
+
+## 21-IdentityRisk
+
+| File | One row per | Key columns |
+|------|-------------|-------------|
+| `risky-users.csv` | Risky user | `RiskLevel`, `RiskState`, `DaysSinceUpdate`, `DirectoryRoles`, `Flags` |
+| `risk-detections.csv` | Detection | `RiskEventType`, `RiskLevel`, `DetectionTiming`, `IpAddress`, `IsAdmin` |
+| `risk-detections-by-type.csv` | Type + level | `Detections`, `DistinctUsers`, `AdminUsers` |
+| `risky-service-principals.csv` | Risky service principal | `RiskLevel`, `HoldsDirectoryRole` |
+| `ca-risk-policies.csv` | CA policy using risk | `State`, `UserRiskLevels`, `SignInRiskLevels`, `GrantControls` |
+
+## 22-PimRoleSettings
+
+| File | One row per | Key columns |
+|------|-------------|-------------|
+| `pim-role-settings.csv` | Directory role | `MaxActivationHours`, `ActivationRequiresMfa`, `ActivationRequiresAuthContext`, `ApprovalRequired`, `Approvers`, `PermanentEligibleAllowed`, `PermanentActiveAllowed`, assignment counts, `Flags` |
