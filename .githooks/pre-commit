@@ -1,0 +1,8 @@
+#!/bin/sh
+# Guardrail: scan what is being committed for identifying info and secrets (README > Guardrail).
+# Installed by tools/guardrail/Install-Guardrail.ps1 (git config core.hooksPath .githooks).
+root="$(git rev-parse --show-toplevel)"
+if command -v pwsh >/dev/null 2>&1; then ps=pwsh
+elif command -v powershell.exe >/dev/null 2>&1; then ps=powershell.exe
+else echo "guardrail: PowerShell not found - refusing commit (fail closed)."; exit 1; fi
+"$ps" -NoProfile -ExecutionPolicy Bypass -File "$root/tools/guardrail/Invoke-Guardrail.ps1" -Mode Staged || exit 1

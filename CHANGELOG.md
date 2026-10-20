@@ -2,6 +2,19 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.3.1 - 2026-10-20
+
+Repository guardrail; no script changes.
+
+### Added
+- `tools/guardrail/`: scanner (`Invoke-Guardrail.ps1`), rules (`rules.psd1`), Microsoft-published ID allowlist (`known-public-ids.txt`), private denylist template, one-time setup (`Install-Guardrail.ps1`) and a self-test (`Test-Guardrail.ps1`) that proves every rule fires and the placeholders pass.
+- `.githooks/pre-commit` and `.githooks/commit-msg`: scan staged files and the commit message; fail closed.
+- `.github/workflows/guardrail.yml`: self-test, full tree + commit message / author scan with the `GUARDRAIL_DENYLIST` secret, and gitleaks over the full history on every push and pull request.
+- `docs/guardrail.md` and `CLAUDE.md`.
+
+### Changed
+- `.gitignore`: also ignores the private denylist, `*.local.psd1`, `.env`, credential XML and more data / archive types.
+
 ## 1.3.0 - 2026-10-20
 
 Documentation restructure; no script changes.

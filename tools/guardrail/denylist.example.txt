@@ -1,0 +1,12 @@
+# Private denylist TEMPLATE. Install-Guardrail.ps1 copies this to denylist.local.txt (gitignored).
+# Put the real list ONLY in denylist.local.txt and in the GUARDRAIL_DENYLIST repo secret (Settings >
+# Secrets and variables > Actions), never in a tracked file.
+# One .NET regex per line, matched case-insensitively. Lines starting with # are ignored.
+#
+# What belongs here - things the generic rules cannot know:
+#   employer and agency names and abbreviations     e.g.  \bcontoso\b
+#   AD / NetBIOS domain names                        e.g.  \bCONTOSO\\
+#   server and host names                            e.g.  \bCTS-APP-\d+\b
+#   group and OU naming prefixes                     e.g.  \bCTS-(Adaxes|IAM)-
+#   people: your own and colleagues' names           e.g.  \bjane\.doe\b
+#   public web hostnames of the org                  e.g.  identity\.contoso\.com

@@ -113,6 +113,8 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 4. Log each finding in Jira with the [finding template](docs/jira-finding-template.md); `tools/New-FindingEvidence.ps1` pre-fills the Evidence and Closure sections from the run folder.
 5. After remediation, rerun with the same parameters and compare summaries; that rerun is the finding's closure evidence.
 
+> **Contributing?** Run `.\tools\guardrail\Install-Guardrail.ps1` once after cloning. See [Guardrail](docs/guardrail.md).
+
 ## Documentation
 
 | Page | Covers |
@@ -125,6 +127,7 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 | [Jira finding template](docs/jira-finding-template.md) | Logging findings with evidence and closure criteria |
 | [Troubleshooting](docs/troubleshooting.md) | Symptoms, causes and fixes |
 | [Design and testing](docs/design-and-testing.md) | Design choices and how the scripts were tested |
+| [Guardrail](docs/guardrail.md) | What keeps identifying information and secrets out of this repo; one-time setup per machine |
 | [Changelog](CHANGELOG.md) | Version history |
 
 ## Repository layout
@@ -134,11 +137,15 @@ iam_scripts/
 ├── README.md                     this file
 ├── CHANGELOG.md                  version history
 ├── LICENSE                       MIT
+├── CLAUDE.md                     rules for AI sessions working in this repo
 ├── .gitignore                    blocks evidence, keys and data exports from being committed
+├── .githooks/                    pre-commit and commit-msg guardrail hooks
+├── .github/workflows/            guardrail CI on every push (backstop for the hooks)
 ├── scripts/                      the twenty-two discovery scripts (self-contained, run independently)
 ├── tools/
 │   ├── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
-│   └── New-FindingEvidence.ps1   pre-fills a Jira finding's Scope, Evidence and Closure from a run folder
+│   ├── New-FindingEvidence.ps1   pre-fills a Jira finding's Scope, Evidence and Closure from a run folder
+│   └── guardrail/                blocks identifying info and secrets from being committed (docs/guardrail.md)
 ├── examples/                     placeholder input templates for scripts 06, 14 and 15
 │   ├── hr.example.csv
 │   ├── iga-accounts.example.csv
@@ -153,12 +160,13 @@ iam_scripts/
     ├── pilot-runbook.md          how to verify each script in the real environment before handover
     ├── jira-finding-template.md  how to log each finding in Jira: fields, description template, severity guide
     ├── troubleshooting.md        symptoms, causes and fixes
+    ├── guardrail.md              no identifying info in the repo: rules, placeholders, setup
     └── design-and-testing.md     why the scripts are built this way, and how they were tested
 ```
 
 ## Author
 
-Written and maintained by Jay Klinkowsky ([jay@everydayidentity.tech](mailto:jay@everydayidentity.tech)). Issues and pull requests are welcome; for anything else, email.
+Written and maintained by Jay Klinkowsky ([jay@everydayidentity.tech](mailto:jay@everydayidentity.tech)). Issues and pull requests are welcome; for anything else, email. <!-- guardrail:allow public author contact, intentional -->
 
 ## License
 

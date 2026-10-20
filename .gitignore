@@ -26,3 +26,27 @@ output/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# ---- Guardrail (tools/guardrail, docs/guardrail.md) ----
+# Private denylist and per-machine settings: never committed
+tools/guardrail/denylist.local.txt
+*.local.psd1
+*.local.json
+.env
+.env.*
+# Credentials
+*.cred.xml
+*cred*.xml
+*.kdbx
+secrets.*
+# Other data / output
+*.tsv
+*.xlsx
+*.xls
+*.bak
+*.zip
+*.7z
+*.evtx
+# Guardrail CI download
+gitleaks
+gl.tgz

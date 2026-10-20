@@ -1,0 +1,35 @@
+# Guardrail CI - backstop for the local hooks (they can be skipped with --no-verify; this cannot).
+# Runs on every push and pull request. Red = something identifying or secret reached GitHub: see README > If CI fails.
+name: guardrail
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # full history: commit messages and gitleaks need every commit
+
+      - name: Guardrail self-test (every rule still fires)
+        shell: pwsh
+        run: ./tools/guardrail/Test-Guardrail.ps1
+
+      - name: Guardrail scan (tree + commit messages, with private denylist)
+        shell: pwsh
+        env:
+          GUARDRAIL_DENYLIST: ${{ secrets.GUARDRAIL_DENYLIST }}
+        run: ./tools/guardrail/Invoke-Guardrail.ps1 -Mode All
+
+      - name: Gitleaks secret scan (full history, redacted output)
+        run: |
+          curl -sSL -o gl.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          tar xzf gl.tgz gitleaks
+          ./gitleaks git . --redact --verbose --exit-code 1

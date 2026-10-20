@@ -1,0 +1,27 @@
+# Microsoft-published identifiers that are the same in every tenant, so they identify nobody.
+# The id-guid rule lets these through. Add one only with its source; never a tenant, app or object ID of your own.
+#
+# Entra built-in role template IDs - https://learn.microsoft.com/entra/identity/role-based-access-control/permissions-reference
+62e90394-69f5-4237-9190-012177145e10  Global Administrator
+e8611ab8-c189-46e8-94e1-60213ab1f814  Privileged Role Administrator
+7be44c8a-adaf-4e2a-84d6-ab2649e08a13  Privileged Authentication Administrator
+194ae4cb-b126-40b2-bd5b-6091b380977d  Security Administrator
+9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3  Application Administrator
+158c047a-c907-4556-b7ef-446551a6b5f7  Cloud Application Administrator
+b1be1c3e-b65d-4f19-8427-f6fa0d97feb9  Conditional Access Administrator
+8ac3fc64-6eca-42ea-9e69-59f4c7b60eb2  Hybrid Identity Administrator
+c4e39bd9-1100-46d3-8c65-fb160da0071f  Authentication Administrator
+fe930be7-5e62-47db-91af-98c3a49a38b1  User Administrator
+29232cdf-9323-42fd-ade2-1d097af3e4de  Exchange Administrator
+f28a1f50-f6e7-4571-818b-6a12f2af6b6c  SharePoint Administrator
+3a2c62db-5318-420d-8d74-23affee5d9d5  Intune Administrator
+45d8d3c5-c802-45c6-b32a-1d70b5e1e86e  Identity Governance Administrator
+#
+# Guest user access levels (authorizationPolicy guestUserRoleId) - https://learn.microsoft.com/graph/api/resources/authorizationpolicy
+a0b1b346-4d3e-4e8b-98f8-753987be4970  Same access as members
+10dae51f-b6af-4016-8d66-8c2a99b929b3  Limited access (default)
+2af84b1e-32c8-42b7-82bc-daa82404023b  Restricted access
+#
+# Microsoft's own tenants (first-party app owners) - https://learn.microsoft.com/troubleshoot/azure/entra/entra-id/governance/verify-first-party-apps-sign-in
+f8cdef31-a31e-4b4a-93e4-5f571e91255a  Microsoft Services tenant
+72f988bf-86f1-41af-91ab-2d7cd011db47  Microsoft corporate tenant
