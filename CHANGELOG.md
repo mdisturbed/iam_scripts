@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.2.1 - 2026-10-20
+
+### Added
+- `docs/jira-finding-template.md`: Jira issue fields, description template, severity guide with examples from the scripts, worked example and evidence rules.
+
 ## 1.2.0 - 2026-10-20
 
 Fills the gaps found when mapping the discovery access matrix against the scripts.

@@ -89,7 +89,8 @@ iam_scripts/
 └── docs/
     ├── permissions.md            roles, scopes, licences and modules per script
     ├── outputs.md                every output file and column, with reading notes
-    └── pilot-runbook.md          how to verify each script in the real environment before handover
+    ├── pilot-runbook.md          how to verify each script in the real environment before handover
+    └── jira-finding-template.md  how to log each finding in Jira: fields, description template, severity guide
 ```
 
 ## Quick start
@@ -699,7 +700,8 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 1. Run `Test-ReadOnly.ps1` and share the result with whoever approves the run.
 2. Pilot each script yourself using the [pilot runbook](docs/pilot-runbook.md).
 3. Collect each `summary.csv` into the status update, plus `dataset-status.csv` for anything `Blocked` or `EvidenceUnavailable`.
-4. After remediation, rerun with the same parameters and compare summaries.
+4. Log each finding in Jira with the [finding template](docs/jira-finding-template.md), citing the run folder and SHA-256.
+5. After remediation, rerun with the same parameters and compare summaries; that rerun is the finding's closure evidence.
 
 ## Troubleshooting
 
