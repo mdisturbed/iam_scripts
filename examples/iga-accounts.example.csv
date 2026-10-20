@@ -1,0 +1,5 @@
+AccountName,System,Status,IdentityId
+User1,Active Directory,Active,ID1001
+User2,Active Directory,Terminated,ID1002
+User3,Active Directory,Active,ID1003
+User1,App1,Active,ID1001

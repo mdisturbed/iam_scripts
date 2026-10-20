@@ -27,7 +27,7 @@
     .\03-Get-AppsAndConsents.ps1 -CredentialWarningDays 60 -IncludeMicrosoftApps
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x, module Microsoft.Graph.Authentication (only)
     Scopes  : Application.Read.All, Directory.Read.All, Policy.Read.All, AuditLog.Read.All
 #>
@@ -51,7 +51,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '03-AppsAndConsents'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $RequiredScopes = @('Application.Read.All', 'Directory.Read.All', 'Policy.Read.All', 'AuditLog.Read.All')
 
 #region ---- Common helpers (identical in every Graph script; self-contained by design) ----
@@ -194,6 +194,7 @@ function Write-RunManifest {
         Parameters    = $Parameters
         Datasets      = $script:Datasets.ToArray()
     }
+    if ($script:ManifestExtra) { $manifest['Extra'] = $script:ManifestExtra }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $script:RunFolder 'run-manifest.json') -Encoding UTF8
     $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') -NoTypeInformation -Encoding UTF8
 }
@@ -383,7 +384,7 @@ try {
         $targets = @($sps | Where-Object { $IncludeMicrosoftApps -or (Get-OwnerClass $_) -ne 'Microsoft' })
         Write-RunLog ("Enumerating app-role assignments and owners for {0} service principals" -f $targets.Count)
         foreach ($s in $targets) {
-            try { $spOwnerCount[$s.id] = @(Invoke-GraphGetAll -Uri ("https://graph.microsoft.com/v1.0/servicePrincipals/{0}/owners?`$select=id" -f $s.id) -Label "owners $($s.id)").Count } catch { $spOwnerCount[$s.id] = '' }
+            try { $spOwnerCount[$s.id] = (Invoke-GraphGetAll -Uri ("https://graph.microsoft.com/v1.0/servicePrincipals/{0}/owners?`$select=id" -f $s.id) -Label "owners $($s.id)").Count } catch { $spOwnerCount[$s.id] = '' }
             foreach ($ar in (Invoke-GraphGetAll -Uri ("https://graph.microsoft.com/v1.0/servicePrincipals/{0}/appRoleAssignments" -f $s.id) -Label "appRoleAssignments $($s.id)")) {
                 $res = $spById[$ar.resourceId]
                 $perm = '(default access)'

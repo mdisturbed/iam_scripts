@@ -1,0 +1,4 @@
+AccountName,System,ResourceName,Status
+User1,Active Directory,Group1,Active
+User3,Active Directory,Group1,Active
+User3,Active Directory,Group2,Removed

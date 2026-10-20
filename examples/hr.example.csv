@@ -1,0 +1,4 @@
+EmployeeId,EmploymentStatus,HireDate,TerminationDate
+1001,Active,2026-01-07,
+1002,Terminated,2020-01-01,2026-09-30
+1003,Active,2026-10-01,

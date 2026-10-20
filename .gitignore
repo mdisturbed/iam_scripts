@@ -18,6 +18,10 @@ output/
 !tools/**
 !scripts/**
 
+# Placeholder input templates are the only CSVs allowed in the repo
+!examples/
+!examples/*.example.csv
+
 # Editor / OS
 .vscode/
 .DS_Store

@@ -8,7 +8,7 @@
         Update-, Enable-, Disable-, Grant-, Revoke-, Move-, Rename-, Reset-, Clear-, Unlock-,
         Install-, Register-, Start- except Start-Sleep, etc.), outside a small allowlist of
         LOCAL-ONLY commands used to write the evidence folder
-      - Invoke-MgGraphRequest without -Method GET
+      - Invoke-MgGraphRequest or Invoke-AzRestMethod without -Method GET
       - Invoke-RestMethod / Invoke-WebRequest / Invoke-Expression / Start-Process
 
     Use it before a reviewer approves the scripts, and again after any edit.
@@ -19,7 +19,7 @@
     .\tools\Test-ReadOnly.ps1 -Path .\scripts\03-Get-AppsAndConsents.ps1
 
 .NOTES
-    Version: 1.0.0. Exit code 0 = pass, 1 = findings.
+    Version: 1.1.0. Exit code 0 = pass, 1 = findings.
 #>
 [CmdletBinding()]
 param([string[]]$Path = @())
@@ -52,6 +52,10 @@ foreach ($file in $Path) {
             if ($text -notmatch '-Method\s+GET\b') { $findings.Add([pscustomobject]@{ File = $leaf; Line = $line; Issue = 'Invoke-MgGraphRequest without -Method GET' }) }
             continue
         }
+        if ($name -eq 'Invoke-AzRestMethod') {
+            if ($cmd.Extent.Text -notmatch '-Method\s+GET\b') { $findings.Add([pscustomobject]@{ File = $leaf; Line = $line; Issue = 'Invoke-AzRestMethod without -Method GET' }) }
+            continue
+        }
         if ($localFunctions -contains $name) { continue }
         if ($LocalOnlyAllowed -contains $name) { continue }
         if ($name -notmatch '-') { continue }   # aliases like %, ?, foreach handled as keywords
@@ -61,7 +65,7 @@ foreach ($file in $Path) {
 }
 
 if ($findings.Count -eq 0) {
-    Write-Host ("PASS - {0} script(s) checked; no state-changing commands and every Graph call is GET." -f $Path.Count) -ForegroundColor Green
+    Write-Host ("PASS - {0} script(s) checked; no state-changing commands and every Graph and ARM call is GET." -f $Path.Count) -ForegroundColor Green
     exit 0
 }
 $findings | Format-Table -AutoSize | Out-String -Width 200 | Write-Host

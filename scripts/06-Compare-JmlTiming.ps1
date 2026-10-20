@@ -26,7 +26,7 @@
     .\06-Compare-JmlTiming.ps1 -HrCsvPath .\hr-export.csv -HrDateFormat 'MM/dd/yyyy' -TerminatedStatusValues 'Terminated','T' -IncludeEntraSignIn
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x, RSAT ActiveDirectory module.
               -IncludeEntraSignIn also needs Microsoft.Graph.Authentication and scopes
               User.Read.All + AuditLog.Read.All (Entra ID P1 for signInActivity).
@@ -68,7 +68,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '06-JmlTiming'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 
 #region ---- Common helpers (identical in every AD script; self-contained by design) ----
 if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot 'output' }
@@ -126,6 +126,7 @@ function Write-RunManifest {
         Parameters    = $Parameters
         Datasets      = $script:Datasets.ToArray()
     }
+    if ($script:ManifestExtra) { $manifest['Extra'] = $script:ManifestExtra }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $script:RunFolder 'run-manifest.json') -Encoding UTF8
     $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') -NoTypeInformation -Encoding UTF8
 }

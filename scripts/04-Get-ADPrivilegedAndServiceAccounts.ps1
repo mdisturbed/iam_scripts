@@ -28,7 +28,7 @@
     .\04-Get-ADPrivilegedAndServiceAccounts.ps1 -Server dc01.contoso.local -ServiceNamePatterns 'svc*','sa_*' -AdditionalPrivilegedGroups 'Group1','Group2'
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x, RSAT ActiveDirectory module, a standard domain account (read)
 #>
 [CmdletBinding()]
@@ -46,7 +46,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '04-ADPrivilegedAndServiceAccounts'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 
 #region ---- Common helpers (identical in every AD script; self-contained by design) ----
 if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot 'output' }
@@ -104,6 +104,7 @@ function Write-RunManifest {
         Parameters    = $Parameters
         Datasets      = $script:Datasets.ToArray()
     }
+    if ($script:ManifestExtra) { $manifest['Extra'] = $script:ManifestExtra }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $script:RunFolder 'run-manifest.json') -Encoding UTF8
     $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') -NoTypeInformation -Encoding UTF8
 }

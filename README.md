@@ -1,10 +1,12 @@
 # IAM Discovery Scripts
 
-Read-only PowerShell scripts that collect evidence for an identity and access management (IAM) gap analysis across **Microsoft Entra ID** and **on-premises Active Directory**.
+Read-only PowerShell scripts that collect evidence for an identity and access management (IAM) gap analysis across **Microsoft Entra ID**, **on-premises Active Directory**, **Exchange Online / SharePoint** and **Azure**.
 
 Each script measures one gap, writes timestamped CSVs plus a run manifest, and can be rerun after remediation to show progress against the same baseline. The output is designed to stand up as audit evidence (for example in a HITRUST, NIST or CIS assessment): every run records who ran it, from where, when, with which permissions, and a SHA-256 hash of every file it produced.
 
-> **Nothing in these scripts changes the directory.** Graph calls go through a single function that only sends HTTP `GET`. AD work uses only `Get-AD*` cmdlets. [`tools/Test-ReadOnly.ps1`](tools/Test-ReadOnly.ps1) proves this statically, without running anything, so a reviewer can confirm it in seconds.
+> **Nothing in these scripts changes anything.** Graph calls go through one function that only sends HTTP `GET`; Azure Resource Manager calls go through one function that only sends `GET`; AD, Exchange and SharePoint work uses only `Get-*` cmdlets. [`tools/Test-ReadOnly.ps1`](tools/Test-ReadOnly.ps1) proves this statically, without running anything, so a reviewer can confirm it in seconds.
+
+> **Test status:** every script is **mock-tested** (see [Testing](#testing)). Before handing a script to others, run it once yourself in the target environment and check it against known answers using the [pilot runbook](docs/pilot-runbook.md).
 
 ---
 
@@ -15,13 +17,14 @@ Each script measures one gap, writes timestamped CSVs plus a run manifest, and c
 - [Quick start](#quick-start)
 - [Prerequisites](#prerequisites)
 - [Authentication](#authentication)
+- [Common parameters](#common-parameters)
 - [The scripts](#the-scripts)
-  - [01 - MFA coverage](#01---mfa-coverage)
-  - [02 - Entra privileged access](#02---entra-privileged-access)
-  - [03 - Apps and consents](#03---apps-and-consents)
-  - [04 - AD privileged and service accounts](#04---ad-privileged-and-service-accounts)
-  - [05 - AD group nesting](#05---ad-group-nesting)
-  - [06 - JML timing](#06---jml-timing)
+  - Entra: [01 MFA coverage](#01---mfa-coverage) · [02 Privileged access](#02---entra-privileged-access) · [03 Apps and consents](#03---apps-and-consents) · [10 Guests](#10---guest-access)
+  - AD: [04 Privileged and service accounts](#04---ad-privileged-and-service-accounts) · [05 Group nesting](#05---ad-group-nesting) · [07 Role mining](#07---role-mining)
+  - Hybrid: [08 Extension attributes](#08---extension-attribute-inventory) · [12 Stale accounts](#12---stale-accounts) · [13 Sync scope](#13---hybrid-sync-scope)
+  - Microsoft 365: [09 Mail forwarding and sharing](#09---mail-forwarding-and-external-sharing)
+  - Azure: [11 Azure RBAC](#11---azure-rbac)
+  - Lifecycle and governance: [06 JML timing](#06---jml-timing) · [14 IGA reconciliation](#14---iga-reconciliation) · [15 Rule-managed access](#15---rule-managed-access)
 - [Output and evidence](#output-and-evidence)
 - [Dataset statuses](#dataset-statuses)
 - [Read-only guarantee](#read-only-guarantee)
@@ -37,14 +40,23 @@ Each script measures one gap, writes timestamped CSVs plus a run manifest, and c
 
 ## What it measures
 
-| # | Script | Gap it measures | Source |
-|---|--------|-----------------|--------|
-| 01 | [`01-Get-MfaCoverage.ps1`](scripts/01-Get-MfaCoverage.ps1) | Inconsistent MFA coverage: Conditional Access policies and exclusions, MFA registration, single-factor and legacy-auth sign-ins | Entra |
-| 02 | [`02-Get-PrivilegedAccess.ps1`](scripts/02-Get-PrivilegedAccess.ps1) | Privileged account sprawl in the cloud: active vs eligible roles, permanent assignments, role-holding groups, privileged-user hygiene | Entra |
-| 03 | [`03-Get-AppsAndConsents.ps1`](scripts/03-Get-AppsAndConsents.ps1) | "Where is my data going": apps, service principals, application and delegated permissions, consent settings, credential hygiene | Entra |
-| 04 | [`04-Get-ADPrivilegedAndServiceAccounts.ps1`](scripts/04-Get-ADPrivilegedAndServiceAccounts.ps1) | Privileged and service-account sprawl on-prem, including indirect admin rights through nesting | AD |
-| 05 | [`05-Get-ADGroupNesting.ps1`](scripts/05-Get-ADGroupNesting.ps1) | Nested groups and group hygiene; the baseline for RBAC role mining | AD |
-| 06 | [`06-Compare-JmlTiming.ps1`](scripts/06-Compare-JmlTiming.ps1) | Manual joiner/mover/leaver (JML) processes: joiner and leaver lag against HR, terminated-but-enabled accounts, orphans | AD + HR file (+ Entra, optional) |
+| # | Script | Question it answers | Source | Version |
+|---|--------|--------------------|--------|---------|
+| 01 | [`01-Get-MfaCoverage.ps1`](scripts/01-Get-MfaCoverage.ps1) | Is MFA actually enforced everywhere, or only registered? | Entra | 1.0.1 |
+| 02 | [`02-Get-PrivilegedAccess.ps1`](scripts/02-Get-PrivilegedAccess.ps1) | Who holds Entra admin roles, how, and are those accounts well managed? | Entra | 1.0.1 |
+| 03 | [`03-Get-AppsAndConsents.ps1`](scripts/03-Get-AppsAndConsents.ps1) | Which apps can reach our data, and are they governed? | Entra | 1.0.1 |
+| 04 | [`04-Get-ADPrivilegedAndServiceAccounts.ps1`](scripts/04-Get-ADPrivilegedAndServiceAccounts.ps1) | Who has admin rights on-prem (including via nesting), and where are the service accounts? | AD | 1.0.1 |
+| 05 | [`05-Get-ADGroupNesting.ps1`](scripts/05-Get-ADGroupNesting.ps1) | How deep and messy is group nesting, and how healthy are groups? | AD | 1.0.1 |
+| 06 | [`06-Compare-JmlTiming.ps1`](scripts/06-Compare-JmlTiming.ps1) | How quickly are joiners provisioned and leavers disabled, compared with HR? | AD + HR file (+ Entra) | 1.0.1 |
+| 07 | [`07-Get-RoleMiningCandidates.ps1`](scripts/07-Get-RoleMiningCandidates.ps1) | Which groups do people in the same department or job code share, and is the HR data clean enough to drive roles? | AD | 1.0.0 |
+| 08 | [`08-Get-ExtensionAttributeInventory.ps1`](scripts/08-Get-ExtensionAttributeInventory.ps1) | Which custom / extension attributes are free to carry new data? | AD (+ Entra) | 1.0.0 |
+| 09 | [`09-Get-MailForwardingAndSharing.ps1`](scripts/09-Get-MailForwardingAndSharing.ps1) | Is mail being forwarded out, and how open is SharePoint / OneDrive sharing? | Exchange Online + SharePoint | 1.0.0 |
+| 10 | [`10-Get-GuestAccess.ps1`](scripts/10-Get-GuestAccess.ps1) | How many guests are there, are they used, and what can they reach? | Entra | 1.0.0 |
+| 11 | [`11-Get-AzureRbac.ps1`](scripts/11-Get-AzureRbac.ps1) | Who has access to Azure resources, at what scope, and to deleted principals? | Azure + Entra | 1.0.0 |
+| 12 | [`12-Get-StaleAccounts.ps1`](scripts/12-Get-StaleAccounts.ps1) | Which identities are really unused once AD and Entra activity are combined? | AD + Entra | 1.0.0 |
+| 13 | [`13-Get-HybridSyncScope.ps1`](scripts/13-Get-HybridSyncScope.ps1) | What actually syncs from AD to Entra, and where do they disagree? | AD + Entra | 1.0.0 |
+| 14 | [`14-Compare-IgaToDirectory.ps1`](scripts/14-Compare-IgaToDirectory.ps1) | Where does the IGA platform's view of accounts and group access differ from AD? | AD + IGA export | 1.0.0 |
+| 15 | [`15-Test-RuleManagedAccess.ps1`](scripts/15-Test-RuleManagedAccess.ps1) | Are applied roles, HR-expected roles and actual group membership in step? | AD + role files | 1.0.0 |
 
 The scripts gather facts. They do not score maturity or recommend fixes; that interpretation belongs in the analysis that uses the evidence.
 
@@ -52,103 +64,130 @@ The scripts gather facts. They do not score maturity or recommend fixes; that in
 
 ```
 iam_scripts/
-├── README.md                  this file
-├── CHANGELOG.md               version history
-├── .gitignore                 blocks evidence, keys and data exports from being committed
-├── scripts/                   the six discovery scripts (self-contained, run independently)
+├── README.md                     this file
+├── CHANGELOG.md                  version history
+├── .gitignore                    blocks evidence, keys and data exports from being committed
+├── scripts/                      the fifteen discovery scripts (self-contained, run independently)
 ├── tools/
-│   └── Test-ReadOnly.ps1      static proof that the scripts cannot write to AD or Entra
+│   └── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
+├── examples/                     placeholder input templates for scripts 06, 14 and 15
+│   ├── hr.example.csv
+│   ├── iga-accounts.example.csv
+│   ├── iga-assignments.example.csv
+│   ├── role-definitions.example.csv
+│   └── rule-map.example.csv
 └── docs/
-    ├── permissions.md         roles, Graph scopes, licences and AD access needed
-    └── outputs.md             every output file and column, with reading notes
+    ├── permissions.md            roles, scopes, licences and modules per script
+    ├── outputs.md                every output file and column, with reading notes
+    └── pilot-runbook.md          how to verify each script in the real environment before handover
 ```
 
 ## Quick start
 
 ```powershell
-# 1. Confirm the scripts are read-only (AST scan only - nothing executes)
+# 1. Prove the scripts are read-only (AST scan only - nothing executes)
 .\tools\Test-ReadOnly.ps1
 
-# 2. Entra discovery, signing in as yourself
-.\scripts\01-Get-MfaCoverage.ps1
-.\scripts\02-Get-PrivilegedAccess.ps1
-.\scripts\03-Get-AppsAndConsents.ps1
+# 2. Entra, signing in as yourself
+.\scripts\01-Get-MfaCoverage.ps1   -OutputRoot D:\Evidence
+.\scripts\02-Get-PrivilegedAccess.ps1 -OutputRoot D:\Evidence
+.\scripts\03-Get-AppsAndConsents.ps1  -OutputRoot D:\Evidence
+.\scripts\10-Get-GuestAccess.ps1      -OutputRoot D:\Evidence
 
-# 3. On-prem AD discovery
-.\scripts\04-Get-ADPrivilegedAndServiceAccounts.ps1 -Server dc01.contoso.local
-.\scripts\05-Get-ADGroupNesting.ps1 -Server dc01.contoso.local
+# 3. On-prem AD, from a management host with RSAT
+.\scripts\04-Get-ADPrivilegedAndServiceAccounts.ps1 -Server dc01.contoso.local -OutputRoot D:\Evidence
+.\scripts\05-Get-ADGroupNesting.ps1                 -Server dc01.contoso.local -OutputRoot D:\Evidence
+.\scripts\07-Get-RoleMiningCandidates.ps1           -GroupingAttributes department,extensionAttribute5 -OutputRoot D:\Evidence
 
-# 4. JML timing against an HR export you supply
-.\scripts\06-Compare-JmlTiming.ps1 -HrCsvPath .\hr-export.csv
+# 4. Hybrid (AD + Entra)
+.\scripts\08-Get-ExtensionAttributeInventory.ps1 -IncludeEntra -OutputRoot D:\Evidence
+.\scripts\12-Get-StaleAccounts.ps1               -IncludeComputers -OutputRoot D:\Evidence
+.\scripts\13-Get-HybridSyncScope.ps1             -IncludeGroups -OutputRoot D:\Evidence
+
+# 5. Microsoft 365 and Azure
+.\scripts\09-Get-MailForwardingAndSharing.ps1 -OutputRoot D:\Evidence
+.\scripts\11-Get-AzureRbac.ps1                -OutputRoot D:\Evidence
+
+# 6. Need input files (templates in .\examples)
+.\scripts\06-Compare-JmlTiming.ps1        -HrCsvPath .\hr-export.csv -OutputRoot D:\Evidence
+.\scripts\14-Compare-IgaToDirectory.ps1   -AccountsCsv .\iga-accounts.csv -AssignmentsCsv .\iga-assignments.csv -OutputRoot D:\Evidence
+.\scripts\15-Test-RuleManagedAccess.ps1   -RoleDefinitionCsv .\roles.csv -RuleMapCsv .\rule-map.csv -OutputRoot D:\Evidence
 
 # Full help for any script
-Get-Help .\scripts\03-Get-AppsAndConsents.ps1 -Full
+Get-Help .\scripts\07-Get-RoleMiningCandidates.ps1 -Full
 ```
 
-Results land in `scripts\output\<script>\<timestamp>Z\`. Start with `summary.csv` in each run folder.
+Start with `summary.csv` in each run folder.
 
 ## Prerequisites
 
-| Need | Scripts | Detail |
-|------|---------|--------|
-| PowerShell 5.1 or 7.x | All | Written for both; tested on 7.4 |
-| `Microsoft.Graph.Authentication` module | 01, 02, 03, (06 with `-IncludeEntraSignIn`) | The only Graph module required; all calls are raw `GET` requests |
-| RSAT `ActiveDirectory` module | 04, 05, 06 | A standard domain account is normally enough to read |
-| Entra directory role | 01, 02, 03 | **Global Reader** preferred; Security Reader + Reports Reader as a fallback |
-| Graph read scopes | 01, 02, 03, 06 | Admin consent once; see [docs/permissions.md](docs/permissions.md) |
-| Entra ID P1 | Sign-in data, registration details | Without it, those datasets are marked `EvidenceUnavailable` |
-| Entra ID P2 / ID Governance | PIM eligibility (02) | Without it, script 02 falls back to plain role assignments |
-| HR export CSV | 06 | See [HR file format](#hr-file-format) |
+### PowerShell and modules
 
-Install the modules if policy allows:
+| Need | Scripts | Notes |
+|------|---------|-------|
+| PowerShell 5.1 or 7.x | All | Written for both; tested on 7.4 |
+| `Microsoft.Graph.Authentication` | 01, 02, 03, 10, 11, 12, 13; 06 / 08 / 09 optionally | The only Graph module needed; all calls are raw `GET` requests |
+| RSAT `ActiveDirectory` | 04, 05, 06, 07, 08, 12, 13, 14, 15 | Read access with a standard domain account is normally enough |
+| `ExchangeOnlineManagement` v3 | 09 | Uses `Get-EXOMailbox` / `Get-EXORecipient` |
+| `Microsoft.Online.SharePoint.PowerShell` | 09 with `-IncludeSiteSharing` | Windows PowerShell 5.1 |
+| `Az.Accounts` | 11 | Only `Connect-AzAccount`, `Get-AzContext` and `Invoke-AzRestMethod -Method GET` |
 
 ```powershell
-Install-Module Microsoft.Graph.Authentication -Scope CurrentUser
-# RSAT on Windows 10/11:
+# If policy allows installing modules:
+Install-Module Microsoft.Graph.Authentication, ExchangeOnlineManagement, Az.Accounts -Scope CurrentUser
 Add-WindowsCapability -Online -Name Rsat.ActiveDirectory.DS-LDS.Tools~~~~0.0.1.0
 ```
 
-If module installs are blocked, Azure Cloud Shell in the tenant includes the Graph modules.
+If installs are blocked, Azure Cloud Shell in the tenant includes the Graph, Exchange and Az modules (but not RSAT).
+
+### Access and licences
+
+| Need | Scripts |
+|------|---------|
+| Entra **Global Reader** (preferred) | 01, 02, 03, 10, 12, 13, 08 / 09 Graph parts |
+| Exchange: Global Reader or View-Only Organization Management | 09 |
+| Azure **Reader** at the root management group, or on each subscription | 11 |
+| Entra ID P1 | Sign-in activity (01, 02, 03, 06, 10, 12) |
+| Entra ID P2 / ID Governance | PIM eligibility (02, 11) |
+
+Scope-by-scope detail is in [docs/permissions.md](docs/permissions.md). Missing access doesn't crash a script; the affected dataset is marked `Blocked` or `EvidenceUnavailable`.
 
 ## Authentication
 
-Graph scripts (01-03, and 06 with `-IncludeEntraSignIn`) support two modes, chosen with `-AuthMode`.
+Every script that uses Graph, Exchange or Azure supports two modes through `-AuthMode`:
 
-| Mode | When to use | Command |
-|------|-------------|---------|
-| `Delegated` (default) | You sign in interactively; data is limited to what your role can read | `.\scripts\01-Get-MfaCoverage.ps1` |
-| `AppCertificate` | A dedicated read-only app registration with a certificate; suits repeatable or scheduled runs | `.\scripts\01-Get-MfaCoverage.ps1 -AuthMode AppCertificate -TenantId tenant-id-redacted -ClientId <app-id> -CertificateThumbprint <thumbprint>` |
+| Mode | When to use | Parameters |
+|------|-------------|------------|
+| `Delegated` (default) | You sign in interactively; results are limited to what your role can read | none |
+| `AppCertificate` | A dedicated read-only app registration with a certificate; suits repeatable runs | `-TenantId`, `-ClientId`, `-CertificateThumbprint` (09 also needs `-ExchangeOrganization contoso.onmicrosoft.com`) |
 
-Each script requests only the read scopes it needs and logs a warning if the token is missing any of them, or if it carries write scopes from an earlier consent (the script still only sends `GET`). Setup steps for app-only mode are in [docs/permissions.md](docs/permissions.md#app-registration-for-app-only-mode-optional).
+Each Graph script requests only the read scopes it needs and logs a warning if the token is missing any of them, or if it carries write scopes from an earlier consent. The scripts still only send `GET`. App-only setup is in [docs/permissions.md](docs/permissions.md#app-registration-for-app-only-mode-optional).
+
+## Common parameters
+
+| Parameter | Scripts | Default | Purpose |
+|-----------|---------|---------|---------|
+| `-OutputRoot` | All | `scripts\output` | Where run folders are written. Point this at the approved evidence location. |
+| `-Server` | AD scripts | session default DC | Domain controller or domain to query, e.g. `dc01.contoso.local` |
+| `-SearchBase` | Most AD scripts | whole domain | Limit to an OU, e.g. `OU=People,DC=contoso,DC=local` |
+| `-AuthMode`, `-TenantId`, `-ClientId`, `-CertificateThumbprint` | Graph / Exchange / Azure scripts | Delegated | See [Authentication](#authentication) |
 
 ## The scripts
 
-Every script shares these parameters:
-
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `-OutputRoot` | `scripts\output` | Where run folders are written |
-
-Graph scripts also share `-AuthMode`, `-TenantId`, `-ClientId` and `-CertificateThumbprint` (see [Authentication](#authentication)). AD scripts share `-Server` (a domain controller or domain, blank for the session default) and, where relevant, `-SearchBase` (an OU, blank for the whole domain).
+Each section lists what the script collects, its own parameters (beyond the [common ones](#common-parameters)), and which file to open first. Every output file and column is described in [docs/outputs.md](docs/outputs.md).
 
 ### 01 - MFA coverage
 
 Measures whether MFA is actually enforced, not just registered.
 
-**Collects**
-- Every Conditional Access policy, flattened, with included and excluded users, groups, roles and apps resolved to names
-- One row per exclusion, and the transitive members of every excluded group
-- MFA registration for every user: registered vs capable, methods, SMS/voice, phone-only
-- Successful single-factor sign-ins over a lookback window, aggregated by user, app and client, with legacy authentication flagged
+**Collects:** every Conditional Access policy flattened with names resolved; one row per exclusion and the transitive members of excluded groups; MFA registration for every user (registered vs capable, SMS/voice, phone-only); successful single-factor sign-ins over a lookback window, with legacy authentication flagged.
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
 | `-SignInLookbackDays` | `7` | Days of sign-in logs to read (1-30) |
-| `-MaxSignInRecords` | `50000` | Safety cap; the output is marked TRUNCATED if reached |
-| `-SkipSignIns` | off | Skip the sign-in query (marked `Deferred`) |
+| `-MaxSignInRecords` | `50000` | Safety cap; output marked TRUNCATED if reached |
+| `-SkipSignIns` | off | Skip the sign-in query |
 | `-SkipExcludedGroupMembers` | off | Skip expanding excluded groups |
-
-**Scopes:** `Policy.Read.All`, `Directory.Read.All`, `AuditLog.Read.All`, `UserAuthenticationMethod.Read.All`
 
 **Start with:** `summary.csv`, then `ca-exclusions.csv` and `signins-singlefactor-success.csv`.
 
@@ -156,83 +195,55 @@ Measures whether MFA is actually enforced, not just registered.
 
 Shows who holds directory roles, how (directly, through a group, permanently or just-in-time), and whether those accounts are well managed.
 
-**Collects**
-- Active role assignments, marked permanent or time-bound, direct or through a group
-- Eligible (PIM) assignments
-- Members of every role-holding group, expanded transitively
-- Role-assignable groups and their owners
-- One row per privileged user: sync source, last sign-in, MFA registration, Tier 0 role, and flags
+**Collects:** active and eligible (PIM) role assignments; members of role-holding groups; role-assignable groups and owners; one row per privileged user with sync source, last sign-in, MFA registration, Tier 0 role and flags. Falls back to plain role assignments if PIM isn't licensed.
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
 | `-StaleDays` | `90` | Days without sign-in before a privileged user is flagged |
 
-**Scopes:** `RoleManagement.Read.Directory`, `Directory.Read.All`, `AuditLog.Read.All`, `UserAuthenticationMethod.Read.All`
-
-The Tier 0 role list is a table at the top of the script and can be extended.
-
-**Start with:** `summary.csv`, then `privileged-users.csv` sorted by `Flags`.
+**Start with:** `summary.csv`, then `privileged-users.csv` sorted by `Flags`. The Tier 0 role list is at the top of the script.
 
 ### 03 - Apps and consents
 
-Builds the first version of the "where is my data going" map: which non-human identities are *authorised* to reach data, and how well they are governed.
+The first version of the "where is my data going" map: which non-human identities are *authorised* to reach data, and how well they're governed.
 
-**Collects**
-- Tenant consent settings: whether users can consent to apps, whether the admin-consent workflow is on
-- App registrations with owners, plus one row per secret or certificate with expiry status
-- Service principals classified as this tenant, third party, managed identity or Microsoft
-- Application permissions granted to each client, flagged as DataAccess or PrivilegeEscalation
-- Delegated grants, admin vs user consent, with high-risk scopes flagged
-- A per-app summary ranked for review (the "data movers" list)
+**Collects:** tenant consent settings; app registrations with owners and one row per secret/certificate; service principals classified as this tenant, third party, managed identity or Microsoft; application permissions flagged DataAccess / PrivilegeEscalation; delegated grants (admin vs user consent); a per-app "data movers" summary ranked for review.
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
 | `-CredentialWarningDays` | `30` | Credentials expiring within this window are flagged |
 | `-LongLivedSecretDays` | `730` | Secrets with a longer lifetime are flagged |
 | `-StaleDays` | `90` | Apps with no sign-in in this window are flagged |
-| `-IncludeMicrosoftApps` | off | Include Microsoft first-party clients (numerous; rarely the question) |
-| `-SkipSignInActivity` | off | Skip the service-principal sign-in report |
+| `-IncludeMicrosoftApps` | off | Include Microsoft first-party clients |
+| `-SkipSignInActivity` | off | Skip the service-principal sign-in report (Graph beta) |
 
-**Scopes:** `Application.Read.All`, `Directory.Read.All`, `Policy.Read.All`, `AuditLog.Read.All`
-
-The high-risk permission list is a table at the top of the script and can be extended. Service-principal last sign-in uses a Graph **beta** report (still a `GET`).
-
-**Start with:** `app-risk-summary.csv`. `TriageScore` only orders the list for review; it is not a risk rating, and the file shows what apps *can* reach, not what they moved.
+**Start with:** `app-risk-summary.csv`. `TriageScore` only orders the list for review.
 
 ### 04 - AD privileged and service accounts
 
-Finds every account with admin rights on-prem, including rights gained indirectly through nested groups, and finds likely service accounts.
+Finds every account with admin rights on-prem, including rights gained through nested groups, and finds likely service accounts.
 
-**Collects**
-- Membership of every protected group (Domain Admins, Enterprise Admins, Schema Admins, Administrators, the Operators groups, DnsAdmins and any you add), expanded with the full nesting path
-- One row per privileged account with hygiene flags: stale, password never expires, old password, SPN on a privileged user (Kerberoastable), pre-auth disabled, delegation, privileged only through nesting
-- Service-account candidates from several detections (SPN, never-expiring password, name pattern, description, gMSA/sMSA), with the reasons listed
-- Accounts with `adminCount=1` that are no longer in any protected group
-- Circular nesting under privileged groups is detected and logged
+**Collects:** membership of every protected group with the full nesting path; one row per privileged account with hygiene flags (stale, password never expires, Kerberoastable, pre-auth disabled, delegation, nested-only); service-account candidates with the detection reasons; `adminCount=1` leftovers.
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
-| `-ServiceNamePatterns` | `svc*`, `svc-*`, `svc_*`, `sa-*`, `sa_*`, `*_svc`, `*-svc`, `srv-*` | Name patterns that indicate a service account |
-| `-AdditionalPrivilegedGroups` | none | Custom admin groups to expand, e.g. `'Group1','Group2'` |
-| `-StaleDays` | `90` | Days without logon before an enabled account is flagged |
+| `-ServiceNamePatterns` | `svc*`, `sa-*`, `sa_*`, … | Name patterns that indicate a service account |
+| `-AdditionalPrivilegedGroups` | none | Custom admin groups to expand |
+| `-StaleDays` | `90` | Days without logon before flagging |
 | `-PasswordAgeWarningDays` | `365` | Passwords older than this are flagged |
 
-**Start with:** `summary.csv`, then `ad-privileged-accounts.csv`. Service accounts are candidates found by heuristics; confirm with owners before reporting a count as fact.
+**Start with:** `summary.csv`, then `ad-privileged-accounts.csv`.
 
 ### 05 - AD group nesting
 
 Builds the full group-in-group graph in memory and reports structure and hygiene for every group.
 
-**Collects**
-- One row per group: type, scope, direct member counts, nesting depth below (`DepthDown`) and above (`DepthUp`), and flags (empty, no owner, no description, mail-enabled security group, deep nesting, circular nesting, naming-convention miss)
-- One row per circular nesting loop
+**Collects:** one row per group with member counts, depth below (`DepthDown`) and above (`DepthUp`), and flags (empty, no owner, mail-enabled security, deep or circular nesting, naming-convention miss); one row per circular loop.
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
 | `-DeepNestingThreshold` | `3` | Groups nested at least this deep are flagged |
-| `-NamingConventionRegex` | none | Regex a well-named group should match, e.g. `'^(RB|APP)-'` |
-
-Reads every group once; run off-peak in large domains. Groups with 5,000 or more members are flagged `MemberListTruncated` because of the AD Web Services read limit.
+| `-NamingConventionRegex` | none | e.g. `'^(RB|APP)-'` |
 
 **Start with:** `summary.csv`, then `ad-groups.csv` filtered on `Flags`.
 
@@ -240,52 +251,213 @@ Reads every group once; run off-peak in large domains. Groups with 5,000 or more
 
 Compares HR lifecycle dates with account state to show how well joiners and leavers are processed.
 
-**Collects**
-- Joiner lag: account created vs hire date (negative = pre-provisioned)
-- Leaver lag: account disabled vs termination date
-- Terminated in HR but still enabled
-- Logon or sign-in after the termination date (AD, and Entra with `-IncludeEntraSignIn`)
-- Active HR records with no AD account
-- Enabled AD accounts with no HR match (orphan candidates)
-- Summary with median, 90th percentile and maximum lags, and the percentage of leavers disabled within the SLA
+**Collects:** joiner lag (account created vs hire date); leaver lag (disabled vs termination date); terminated-but-enabled; logon or sign-in after termination; active HR records with no account; enabled accounts with no HR match; median, 90th percentile and maximum lags.
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
-| `-HrCsvPath` | required | Path to the HR export |
-| `-HrIdColumn` | `EmployeeId` | HR column holding the person's id |
-| `-HrStatusColumn` | `EmploymentStatus` | HR column holding employment status |
-| `-HrHireDateColumn` | `HireDate` | HR column holding the hire date |
-| `-HrTermDateColumn` | `TerminationDate` | HR column holding the termination date |
-| `-HrDateFormat` | invariant parse | Exact date format, e.g. `'MM/dd/yyyy'` |
+| `-HrCsvPath` | required | HR export ([template](examples/hr.example.csv)) |
+| `-HrIdColumn`, `-HrStatusColumn`, `-HrHireDateColumn`, `-HrTermDateColumn` | `EmployeeId`, `EmploymentStatus`, `HireDate`, `TerminationDate` | Map the export's column names |
+| `-HrDateFormat` | invariant parse | e.g. `'MM/dd/yyyy'` |
 | `-TerminatedStatusValues` | `Terminated`, `Inactive` | Status values that mean "left" |
 | `-AdMatchAttribute` | `employeeID` | AD attribute holding the HR id |
-| `-ExcludeNamePatterns` | `svc*`, `sa-*`, `sa_*`, `adm*`, `*admin*`, `test*` | Accounts excluded from the orphan list |
-| `-LeaverSlaDays` | `1` | Days allowed between termination and disable |
-| `-SkipDisableTimestamp` | off | Skip per-user replication metadata (faster, no leaver lag) |
-| `-IncludeEntraSignIn` | off | Add Entra sign-in after termination (needs Graph) |
-
-#### HR file format
-
-Any CSV with one row per person. Only these four columns are read; rename them with the parameters above if the export differs.
-
-```csv
-EmployeeId,EmploymentStatus,HireDate,TerminationDate
-1001,Active,2026-01-07,
-1002,Terminated,2020-01-01,2026-09-30
-```
-
-**Caveats:** disable time is approximated from the last change to `userAccountControl`, so it can be later than the real disable if that attribute changed again. `lastLogonTimestamp` replicates on a 9-14 day cycle, so AD logon-after-termination is indicative; the Entra check is more precise.
+| `-LeaverSlaDays` | `1` | Allowed days between termination and disable |
+| `-IncludeEntraSignIn` | off | Add Entra sign-in after termination |
 
 **Start with:** `summary.csv`, then `jml-terminated-still-enabled.csv`.
+
+### 07 - Role mining
+
+Supports the move to RBAC (birthright → department roles → job-code roles). For each value of each grouping attribute, it measures how many people in that population hold each group.
+
+**Collects:**
+- **Attribute quality:** blank %, distinct values, and values spelled more than one way (`IT` vs `I.T.`, `Finance` vs `finance`). Rule-based roles only work on clean attributes, and this shows whether the data can carry them.
+- **Populations:** the size of each department or job-code group.
+- **Birthright candidates:** groups held by almost everyone (default 90%+).
+- **Role candidates:** groups held by most of one population (default 80%+), with lift against the overall rate.
+- **Outliers:** people missing a group their peers have, and people holding a group that is rare in their population and overall. These are questions for managers, not findings.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-GroupingAttributes` | `department`, `title` | Attributes that define populations; add the job-code attribute |
+| `-MinPopulation` | `5` | Smaller populations are listed but not mined |
+| `-RoleThreshold` | `0.8` | Share of a population that makes a group a role candidate |
+| `-CommonThreshold` | `0.5` | Minimum share to appear in `role-candidates.csv` |
+| `-BirthrightThreshold` | `0.9` | Share of all users that makes a group a birthright candidate |
+| `-OutlierThreshold` | `0.1` | "Rare" for uncommon-access outliers |
+| `-ExcludeNamePatterns` | service/admin patterns | Accounts left out of mining |
+| `-ExcludeGroupRegex` | none | Groups left out, e.g. `'^(All Staff|Everyone)'` |
+| `-ExpandNested` | off | Count access through nested groups too |
+| `-NormalizeValues` | off | Treat `IT` and `it ` as one population once variants are confirmed cosmetic |
+| `-IncludeDisabled`, `-IncludeDistributionGroups`, `-SkipOutliers` | off | |
+
+**Start with:** `attribute-quality.csv` and `attribute-value-variants.csv` (fix the data first), then `birthright-candidates.csv` and `role-candidates.csv`.
+
+### 08 - Extension attribute inventory
+
+Before choosing an attribute to carry new data (for example the roles applied by the JML automation), find out which are already in use.
+
+**Collects:** for AD users (and optionally groups), `extensionAttribute1-15` plus any listed attributes, with populated count and %, distinct values, maximum length, format hints (List, Date, Number, Email, LowCardinality, UniquePerObject) and top values; status `InUse`, `Rare`, `Unused` or `NotInSchema`. With `-IncludeEntra`: cloud-only users' `onPremisesExtensionAttributes`, directory (schema) extensions registered by apps, and optionally custom security attribute definitions.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-AdditionalAttributes` | `employeeType`, `employeeNumber`, `division`, `departmentNumber`, `info` | Extra attributes to profile |
+| `-IncludeCloudExtensionAttributes` | off | Add `msDS-cloudExtensionAttribute1-20` |
+| `-IncludeGroups` | off | Profile groups as well as users |
+| `-SampleValueCount` | `3` | Top values shown; `0` suppresses them if values could be personal data |
+| `-IncludeEntra` | off | Add the Entra datasets |
+| `-CountExtensionUsage` | off | Count users holding each directory extension |
+| `-IncludeCustomSecurityAttributes` | off | Needs `CustomSecAttributeDefinition.Read.All` and Attribute Definition Reader |
+
+**Start with:** `summary.csv` (lists unused attributes by name), then `ad-attribute-usage.csv`. *Unused* doesn't prove nothing reads an attribute: check Entra Connect sync rules, Exchange (extensionAttribute1-15 are Exchange custom attributes) and any app that reads AD.
+
+### 09 - Mail forwarding and external sharing
+
+The human side of "where is my data going" (script 03 covers apps).
+
+**Collects:** accepted domains; mailboxes with forwarding set, flagged external; inbox rules that forward or redirect (flagged external) and rules that delete or bury mail in RSS Feeds / Deleted Items / Archive / Conversation History (`ForwardAndHide` is a common sign of a compromised mailbox); transport rules that redirect, copy or BCC; remote domains allowing auto-forward; outbound spam policy forwarding mode; SharePoint tenant sharing settings; optionally per-site sharing capability.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-ExchangeOrganization` | none | e.g. `contoso.onmicrosoft.com`; required for app-only Exchange sign-in |
+| `-MaxMailboxes` | `0` (all) | Limit the inbox-rule scan (one call per mailbox) |
+| `-SkipInboxRules` | off | Skip inbox rules (fast pass) |
+| `-SkipSharePointSettings` | off | Skip the Graph SharePoint settings |
+| `-IncludeSiteSharing` | off | Read every site's sharing capability (needs `-SharePointAdminUrl`) |
+| `-SharePointAdminUrl` | none | e.g. `https://contoso-admin.sharepoint.com` |
+| `-IncludeOneDrive` | off | Include OneDrive sites in the site scan |
+
+**Start with:** `summary.csv`, then `exo-inbox-rules.csv` filtered on `ForwardAndHide` and `ExternalForward`.
+
+### 10 - Guest access
+
+Guests are often the largest pool of stale access.
+
+**Collects:** external collaboration settings (who can invite, guest permission level, default cross-tenant access, partner policy count); one row per guest with home domain, invitation state, last sign-in, group/role/app counts, sponsors and flags (`PendingInvitation`, `PendingOverNd`, `NeverSignedIn`, `NoSignInNd`, `Disabled`, `HoldsDirectoryRole`, `NoSponsor`); one row per home domain.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-StaleDays` | `90` | Days without sign-in before flagging |
+| `-PendingDays` | `30` | Pending invitations older than this are flagged |
+| `-SkipMemberships` | off | Fast pass: no per-guest group/app calls |
+| `-IncludeSponsors` | off | Read each guest's sponsors |
+
+**Start with:** `summary.csv`, then `guests.csv` filtered on enabled guests that are stale or never signed in.
+
+### 11 - Azure RBAC
+
+Entra roles control the tenant; Azure RBAC controls the resources.
+
+**Collects:** visible management groups and subscriptions; every role assignment at management group, subscription, resource group and resource scope (de-duplicated, principal resolved via Graph); eligible PIM assignments where licensed; custom roles flagged when they contain `*` or authorization-write actions; classic administrators. Assignment flags: `DirectUserAssignment`, `GuestPrincipal`, `OrphanedPrincipal`, `PrivilegedAtBroadScope`, `ServicePrincipalPrivileged`, `CustomRoleRisky`.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-SubscriptionId` | all visible | Limit to listed subscriptions |
+| `-SkipManagementGroups` | off | Skip management-group scopes |
+| `-SkipEligible` | off | Skip PIM eligibility |
+| `-SkipPrincipalResolution` | off | Don't call Graph; principals show as IDs |
+
+**Start with:** `summary.csv`, then `azure-role-assignments.csv` filtered on `OrphanedPrincipal` (safe clean-up) and `PrivilegedAtBroadScope`. Subscriptions you can't read are counted in the summary and logged; they are not silently skipped.
+
+### 12 - Stale accounts
+
+A user can look stale in AD while signing in to Microsoft 365 every day, or the reverse. This joins AD and Entra and uses the newest activity from either side.
+
+**Collects:** one row per identity (Hybrid, ADOnly, CloudOnly) with enabled state on each side, AD last logon, Entra interactive / non-interactive / successful sign-in, newest activity, activity bucket (0-30 … 365+, Never) and flags (`NeverUsed`, `Stale`, `EnabledMismatch`, `CreatedButNeverUsed`, `PasswordNeverExpires`, `Guest`); optionally stale computer accounts.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-AnchorAttribute` | `objectGUID` | Use `mS-DS-ConsistencyGuid` if Entra Connect anchors on it |
+| `-StaleDays` | `90` | Threshold for `Stale` |
+| `-NewAccountGraceDays` | `30` | New accounts aren't flagged as never used until this old |
+| `-EnabledOnly` | off | Only identities enabled on at least one side |
+| `-IncludeComputers` | off | Add stale AD computer accounts |
+
+**Start with:** `summary.csv`; the "Stale in AD but active in Entra" line shows how many accounts an AD-only check would have wrongly flagged.
+
+### 13 - Hybrid sync scope
+
+Any provisioning design that writes to AD depends on knowing what reaches Entra.
+
+**Collects:** tenant sync status (on/off, last sync, last password-hash sync, optional feature flags); per-OU coverage with inferred scope (`InScope`, `OutOfScope`, `Partial - investigate`); enabled AD users not in Entra; synced Entra users with no AD match (orphaned, or from another domain); cloud-only users that look like duplicates of AD users; provisioning errors; optionally the same for groups (matched on SID).
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-AnchorAttribute` | `objectGUID` | As in script 12 |
+| `-IncludeGroups` | off | Add group coverage and orphans |
+| `-IncludeSyncFeatures` | off | Read sync feature flags (`OnPremDirectorySynchronization.Read.All`) |
+| `-SyncStaleHours` | `24` | Warn if the last sync is older |
+
+**Start with:** `summary.csv`, then `sync-ou-coverage-users.csv` rows marked Partial. Scope is inferred from results, not read from the Entra Connect configuration. Run once per domain in a multi-domain forest.
+
+### 14 - IGA reconciliation
+
+Shows where the IGA platform's view differs from AD. Run it before JML moves to a new platform, to document what the current IGA does and doesn't control. Inputs are CSV exports you supply; nothing connects to the IGA.
+
+**Collects:**
+- an input profile (rows, systems and status values seen) to confirm the column mapping
+- AD accounts the IGA doesn't know, with service/admin patterns marked separately
+- IGA accounts missing from AD
+- status mismatches, where `IgaInactive_ADEnabled` is the highest risk
+
+With an assignments export it also collects:
+- governed groups, with counts of members in both, AD-only and IGA-only
+- memberships granted outside the IGA
+- IGA assignments not present in AD
+- AD security groups the IGA never assigns
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-AccountsCsv` | required | One row per account per system ([template](examples/iga-accounts.example.csv)) |
+| `-AssignmentsCsv` | none | One row per account per group ([template](examples/iga-assignments.example.csv)) |
+| `-SystemName` | `Active Directory` | Value identifying AD rows; wildcards allowed |
+| `-Acct*Column`, `-Asg*Column` | see templates | Map the export's column names |
+| `-ActiveStatusValues` / `-InactiveStatusValues` | `Active`, `Enabled` / `Disabled`, `Inactive`, `Terminated`, `Deleted`, `Expired`, `Removed`, `Revoked` | Status mapping |
+| `-AdAccountKey` | `sAMAccountName` | Or `userPrincipalName` |
+| `-AdGroupKey` | `Name` | Or `sAMAccountName`, `DistinguishedName` |
+| `-ServiceNamePatterns` | service/admin patterns | Marked separately in the unmanaged list |
+| `-GroupSearchBase` | whole domain | Limit the group scope |
+
+**Start with:** `iga-input-profile.csv` (check the mapping), then `summary.csv` and `account-status-mismatch.csv`. Compares direct membership; access the IGA grants through nesting appears as "not in AD" for the parent group.
+
+### 15 - Rule-managed access
+
+A drift check for rule-based access once roles are in place. It assumes each role maps to groups (role definition file), the JML automation records applied roles on the user in an attribute, and rule-managed groups are identifiable.
+
+**Collects:**
+- **Role-definition check:** groups that don't exist, groups not tagged as rule-managed, tagged groups that no role uses, and roles in the rule map that aren't defined.
+- **Per-user reconciliation:**
+  - applied roles, and HR-expected roles if a rule map is supplied
+  - `RolesToAdd` / `RolesToRemove`, which show a mover that wasn't processed
+  - unknown role codes
+  - `MissingGroups`: groups required by an applied role that the user isn't in
+  - `ExtraRuleGroups`: rule-managed groups the user is in that no applied role justifies
+- **Drift detail:** one row per difference.
+
+Run it on a schedule after go-live and the output becomes ongoing evidence that rule-based access is working.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `-RoleDefinitionCsv` | required | `RoleCode,GroupName` ([template](examples/role-definitions.example.csv)) |
+| `-RuleMapCsv` | none | `Attribute,Value,RoleCode`; `*,*` for everyone ([template](examples/rule-map.example.csv)) |
+| `-AppliedRolesAttribute` | `extensionAttribute10` | Attribute holding applied roles; pick one with script 08 |
+| `-Separator` | `;` | Separator inside that attribute |
+| `-RuleManagedGroupRegex` | none | Identify rule-managed groups by name, e.g. `'^RB-'` |
+| `-GroupTagAttribute` / `-GroupTagValues` | none / `Birthright`, `Department`, `JobCode` | Or identify them by an attribute on the group |
+| `-OnlyDrift` | off | Write only users with differences |
+| `-IncludeDisabled`, `-ExcludeNamePatterns` | | |
+
+If neither a regex nor a tag is given, the groups in the role definition file are treated as rule-managed.
+
+**Start with:** `role-definition-check.csv` (fix any issues first), then `summary.csv` and `drift-detail.csv`.
 
 ## Output and evidence
 
 ```
-scripts\output\
-  01-MfaCoverage\
+<OutputRoot>\
+  07-RoleMining\
     20261020-140501Z\
-      ca-policies.csv            data files (one per dataset)
-      ca-exclusions.csv
+      attribute-quality.csv      data files (one per dataset)
+      role-candidates.csv
       ...
       summary.csv                headline metrics for the status report
       dataset-status.csv         one row per dataset: status, rows, SHA-256, note
@@ -293,104 +465,116 @@ scripts\output\
       run.log                    timestamped log of the run
 ```
 
-- All timestamps are UTC, ISO 8601, so files are independent of the regional settings of the machine that ran them.
-- `run-manifest.json` records the Windows account and machine, the Graph account and app, the scopes in the token, the parameters used, and every dataset with its row count and SHA-256 hash.
-- Each run gets a new folder, so reruns never overwrite earlier evidence. Compare `summary.csv` across runs to show change over time.
-
-Every output file and column is described in [docs/outputs.md](docs/outputs.md).
+- All timestamps are UTC, ISO 8601, independent of the run machine's regional settings.
+- `run-manifest.json` records the Windows account and machine, the Graph account and app, the scopes in the token, the Azure / Exchange connection where used, the parameters, and every dataset with its row count and SHA-256.
+- Each run gets a new folder, so reruns never overwrite earlier evidence. Compare `summary.csv` across runs to show change.
+- Scripts that read an input file (06, 14, 15) record its SHA-256, so you can prove which export was used without storing it with the results.
 
 ## Dataset statuses
-
-Every dataset ends in exactly one state, so missing evidence is visible rather than silent:
 
 | Status | Meaning | What to do |
 |--------|---------|------------|
 | `Completed` | Data collected. Zero rows is still Completed. | Nothing |
 | `Blocked` | Permission denied or the call failed | Fix access, rerun |
-| `Deferred` | Skipped on purpose by a switch | Rerun without the switch when ready |
-| `EvidenceUnavailable` | The tenant cannot produce it (e.g. licence not present) | Record as a finding |
+| `Deferred` | Skipped on purpose by a switch, or an optional input wasn't supplied | Rerun with the switch or input when ready |
+| `EvidenceUnavailable` | The tenant can't produce it (e.g. licence not present) | Record as a finding |
 
 ## Read-only guarantee
 
-The scripts are built so a reviewer can verify they change nothing:
-
-1. **One Graph entry point.** All Graph traffic goes through `Invoke-GraphGet`, which calls `Invoke-MgGraphRequest -Method GET`. There is no other way the scripts talk to Graph.
-2. **Read cmdlets only for AD.** Only `Get-AD*` cmdlets are used.
-3. **Read scopes only.** The delegated sign-in requests read scopes only.
-4. **Static proof.** [`tools/Test-ReadOnly.ps1`](tools/Test-ReadOnly.ps1) parses each script with the PowerShell AST, without running it, and fails if it finds:
-   - any command with a state-changing verb (`New-`, `Set-`, `Remove-`, `Add-`, `Update-`, `Enable-`, `Disable-`, `Grant-`, `Revoke-`, `Move-`, `Reset-` and so on), outside a short allowlist of commands that only write to the local evidence folder
-   - any `Invoke-MgGraphRequest` without `-Method GET`
+1. **One Graph entry point.** All Graph traffic goes through `Invoke-GraphGet`, which calls `Invoke-MgGraphRequest -Method GET`.
+2. **One Azure entry point.** All ARM traffic in script 11 goes through `Invoke-ArmGet`, which calls `Invoke-AzRestMethod -Method GET`.
+3. **Read cmdlets only** for AD (`Get-AD*`), Exchange (`Get-EXO*`, `Get-InboxRule`, `Get-TransportRule`, …) and SharePoint (`Get-SPOSite`).
+4. **Read scopes only** are requested at sign-in.
+5. **Static proof.** [`tools/Test-ReadOnly.ps1`](tools/Test-ReadOnly.ps1) parses each script with the PowerShell AST, without running it, and fails on:
+   - any state-changing verb (`New-`, `Set-`, `Remove-`, `Add-`, `Update-`, `Enable-`, `Disable-`, `Grant-`, `Revoke-`, …) outside a short allowlist of commands that only write the local evidence folder
+   - any `Invoke-MgGraphRequest` or `Invoke-AzRestMethod` without `-Method GET`
    - `Invoke-RestMethod`, `Invoke-WebRequest`, `Invoke-Expression`, `Invoke-Command`, `Start-Process`
 
 ```powershell
-.\tools\Test-ReadOnly.ps1                                      # all scripts
-.\tools\Test-ReadOnly.ps1 -Path .\scripts\03-Get-AppsAndConsents.ps1
+.\tools\Test-ReadOnly.ps1                                         # all scripts
+.\tools\Test-ReadOnly.ps1 -Path .\scripts\11-Get-AzureRbac.ps1    # one script
 ```
 
 Exit code `0` means pass. Run it again after any edit.
 
 ## Handling the output
 
-The CSVs contain identity data (names, UPNs, sign-in activity, group membership), and script 06 reads HR data. Treat every run folder as sensitive:
+The CSVs contain identity data (names, UPNs, sign-in activity, group membership, mail forwarding targets), and scripts 06, 14 and 15 read HR or IGA exports. Treat every run folder as sensitive:
 
-- Store output only in the location approved for evidence, **never in this repository**. `.gitignore` excludes `output/` and all CSV, JSON and log files as a safeguard.
+- Store output only in the approved evidence location, **never in this repository**. `.gitignore` excludes `output/` and all CSV, JSON and log files; only the placeholder templates in `examples/` are allowed.
 - Follow the environment's retention rule and delete local copies once evidence is filed.
-- Do not paste raw output into tools that are not approved for that data.
-- The HR file's SHA-256 is recorded in the summary, so you can prove which export was used without keeping it alongside the results.
+- Use `-SampleValueCount 0` with script 08 if attribute values could be personal data.
+- Do not paste raw output into tools that aren't approved for that data.
 
 ## Locked-down environments
 
 If USB and downloads are blocked, bring the scripts in by whatever route policy allows, in this order:
 
-1. **The organization's own code repository**, with review. This also gives a record of what was run.
+1. **The organization's own code repository**, with review. This also records what was run.
 2. **Paste or retype** into an editor on the work machine. Each script is self-contained, with configuration at the top.
 
-`Test-ReadOnly.ps1` gives the approver a quick way to confirm nothing writes to the directory. If module installs are blocked, Azure Cloud Shell in the tenant includes the Graph modules.
+`Test-ReadOnly.ps1` gives the approver a quick way to confirm nothing writes anything. If module installs are blocked, Azure Cloud Shell includes the Graph, Exchange and Az modules.
 
 ## Using the results
 
-A suggested order for a first discovery pass:
+A suggested order for a discovery pass, matched to the three common gaps and the move to rule-based access:
+
+| Goal | Scripts |
+|------|---------|
+| MFA coverage | 01 |
+| Privileged and service account sprawl | 02, 04, 11 |
+| "Where is my data going" | 03, 09, 10 |
+| Stale and orphaned identities | 12, 13, 06 |
+| Current lifecycle and governance baseline | 06, 14 |
+| Groups and RBAC design | 05, 07, 08 |
+| After rule-based access goes live | 15 (scheduled), 06 and 12 (rerun) |
 
 1. Run `Test-ReadOnly.ps1` and share the result with whoever approves the run.
-2. Run 01, 02 and 03 once read access is granted. They answer the MFA, privileged-access and data-flow questions.
-3. Run 04 and 05 from an approved management host.
-4. Run 06 once an HR export is available.
-5. Collect each `summary.csv` into the status update, with the `dataset-status.csv` for anything `Blocked` or `EvidenceUnavailable`.
-6. After remediation, rerun the same scripts with the same parameters and compare summaries to show measured progress.
+2. Pilot each script yourself using the [pilot runbook](docs/pilot-runbook.md).
+3. Collect each `summary.csv` into the status update, plus `dataset-status.csv` for anything `Blocked` or `EvidenceUnavailable`.
+4. After remediation, rerun with the same parameters and compare summaries.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `Module Microsoft.Graph.Authentication not found` | Module missing | Install it, or run from Azure Cloud Shell |
-| Dataset `Blocked` with 403 / `Authorization_RequestDenied` | Role or scope missing | Check `ScopesInToken` in `run-manifest.json` against [docs/permissions.md](docs/permissions.md) |
-| Dataset `EvidenceUnavailable` mentioning a licence | Tenant lacks Entra ID P1/P2 | Record as a finding; nothing to fix in the script |
-| `signins-singlefactor-success` note says TRUNCATED | Hit `-MaxSignInRecords` | Shorter `-SignInLookbackDays` or a higher cap |
-| `role-assignments-eligible` is `EvidenceUnavailable` | No PIM licence | Expected; active assignments still collected |
-| Repeated `HTTP 429` warnings | Graph throttling | Handled automatically with back-off; large tenants just take longer |
-| `HR file has no column ...` | Column names differ | Map them with `-HrIdColumn`, `-HrStatusColumn` and so on |
-| "HR date values that failed to parse" above zero | Date format not recognized | Set `-HrDateFormat` |
-| Many orphan candidates in script 06 | Service/admin accounts or a different match attribute | Extend `-ExcludeNamePatterns`, check `-AdMatchAttribute` |
-| `Group ... not found; skipped` in script 04 | Group doesn't exist in this domain (e.g. forest-root groups in a child domain) | Informational |
-| Execution policy blocks the script | Local policy | `Unblock-File` on the scripts, or follow the approved signing process |
+| `Module ... not found` | Module missing | Install it, or run from Azure Cloud Shell |
+| Dataset `Blocked` with 403 / `Authorization_RequestDenied` | Role or scope missing | Compare `ScopesInToken` in `run-manifest.json` with [docs/permissions.md](docs/permissions.md) |
+| Dataset `EvidenceUnavailable` mentioning a licence | Tenant lacks Entra ID P1/P2 | Record as a finding |
+| Script 01 note says TRUNCATED | Hit `-MaxSignInRecords` | Shorter lookback or higher cap |
+| Repeated `HTTP 429` warnings | Throttling | Handled with back-off; large tenants take longer |
+| Script 06: `HR file has no column ...` | Column names differ | Map with `-HrIdColumn` and so on |
+| Script 06: date values failed to parse | Date format not recognized | Set `-HrDateFormat` |
+| Script 07: almost no populations meet the minimum | Attribute values inconsistent or too granular | Read `attribute-value-variants.csv`; try `-NormalizeValues` or a lower `-MinPopulation` |
+| Script 08: `Bulk read failed ... retrying per attribute` | An attribute isn't in the schema | Informational; it shows as `NotInSchema` |
+| Script 09: `exo-inbox-rules` slow | One call per mailbox | `-MaxMailboxes 500` for a sample, or `-SkipInboxRules` |
+| Script 11: "Scopes that could not be read" above 0 | No Reader on some subscriptions | Request Reader at the root management group |
+| Scripts 12 / 13: few AD users matched to Entra | Entra Connect anchors on a different attribute | `-AnchorAttribute 'mS-DS-ConsistencyGuid'` |
+| Script 14: `No account rows match System` | `-SystemName` doesn't match the export | Check "Systems seen" in `iga-input-profile.csv` |
+| Script 14: many `UnmappedIgaStatus` rows | Status values not in the lists | Extend `-ActiveStatusValues` / `-InactiveStatusValues` |
+| Script 15: everyone shows drift | Applied-roles attribute not yet populated, or wrong attribute | Check `-AppliedRolesAttribute` with script 08 |
+| Execution policy blocks a script | Local policy | `Unblock-File`, or follow the approved signing process |
 
 ## Design choices
 
-- **One file per area, no shared module.** Each script can be reviewed, approved, transferred or retyped on its own. The helper block at the top of each script is intentionally identical across scripts.
-- **Minimal dependencies.** Graph scripts need only `Microsoft.Graph.Authentication`; AD scripts need only RSAT.
+- **One file per area, no shared module.** Each script can be reviewed, approved, transferred or retyped on its own. The helper block at the top of each script is intentionally identical across scripts of the same kind.
+- **Minimal dependencies.** Only the modules listed under [Prerequisites](#prerequisites); no Graph SDK sub-modules, no Az.Resources.
 - **Configuration at the top.** Every environment-specific value is a parameter with a placeholder default (`contoso.local`, `tenant-id-redacted`). Nothing environment-specific is stored in the repository.
-- **Throttling and paging handled.** Graph requests follow every page and back off on `429` and `5xx`, so large tenants don't produce silently incomplete results.
-- **Facts, not conclusions.** Flags and triage scores are sorting aids. Scoring, maturity and recommendations belong in the analysis.
+- **Paging and throttling handled.** Graph and ARM requests follow every page and back off on `429` and `5xx`.
+- **Case-sensitive where it matters.** Attribute values are counted exactly as stored, so `Finance` and `finance` appear as separate values instead of being silently merged.
+- **Facts, not conclusions.** Flags and triage scores are sorting aids; scoring and recommendations belong in the analysis.
 
 ## Testing
 
 Before release, every script was:
 
 - parse-checked and linted with PSScriptAnalyzer (no errors or warnings outside documented exclusions)
-- checked with `Test-ReadOnly.ps1`, including a negative test that confirmed it catches a write cmdlet and a non-GET Graph call
-- run end to end on PowerShell 7.4 against mocked Graph and AD responses using placeholder data, covering paging, missing licences, unresolved objects, circular nesting and expired credentials
+- checked with `Test-ReadOnly.ps1`, including negative tests confirming it catches write cmdlets, non-GET Graph calls and non-GET ARM calls
+- run end to end on PowerShell 7.4 against mocked Graph, AD, Exchange Online, SharePoint and Azure Resource Manager responses using placeholder data, including paging, missing licences, permission failures, deleted principals, circular nesting, case variants, expired credentials, missing schema attributes and every optional switch
 
-The scripts have **not yet been run against a live tenant**. Expect to tune naming patterns and thresholds on the first run, and report anything unexpected so the scripts can be corrected.
+Results were checked against the values the mock data should produce, not only for "no errors". This caught and fixed real defects before release (see [CHANGELOG.md](CHANGELOG.md)).
+
+**The scripts have not yet been run against a live environment.** Use the [pilot runbook](docs/pilot-runbook.md) to verify each one before handing it to others.
 
 ## Version history
 

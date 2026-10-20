@@ -29,7 +29,7 @@
     .\01-Get-MfaCoverage.ps1 -AuthMode AppCertificate -TenantId tenant-id-redacted -ClientId <app-id> -CertificateThumbprint <thumbprint>
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x, module Microsoft.Graph.Authentication (only)
     Scopes  : Policy.Read.All, Directory.Read.All, AuditLog.Read.All, UserAuthenticationMethod.Read.All
     Licence : Sign-in logs and registration details require Entra ID P1 or higher.
@@ -54,7 +54,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '01-MfaCoverage'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $RequiredScopes = @('Policy.Read.All', 'Directory.Read.All', 'AuditLog.Read.All', 'UserAuthenticationMethod.Read.All')
 
 #region ---- Common helpers (identical in every Graph script; self-contained by design) ----
@@ -197,6 +197,7 @@ function Write-RunManifest {
         Parameters    = $Parameters
         Datasets      = $script:Datasets.ToArray()
     }
+    if ($script:ManifestExtra) { $manifest['Extra'] = $script:ManifestExtra }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $script:RunFolder 'run-manifest.json') -Encoding UTF8
     $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') -NoTypeInformation -Encoding UTF8
 }

@@ -25,7 +25,7 @@
     .\02-Get-PrivilegedAccess.ps1 -StaleDays 60
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x, module Microsoft.Graph.Authentication (only)
     Scopes  : RoleManagement.Read.Directory, Directory.Read.All, AuditLog.Read.All, UserAuthenticationMethod.Read.All
     Licence : signInActivity needs Entra ID P1; PIM schedules need P2 / ID Governance.
@@ -46,7 +46,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '02-PrivilegedAccess'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $RequiredScopes = @('RoleManagement.Read.Directory', 'Directory.Read.All', 'AuditLog.Read.All', 'UserAuthenticationMethod.Read.All')
 
 #region ---- Common helpers (identical in every Graph script; self-contained by design) ----
@@ -189,6 +189,7 @@ function Write-RunManifest {
         Parameters    = $Parameters
         Datasets      = $script:Datasets.ToArray()
     }
+    if ($script:ManifestExtra) { $manifest['Extra'] = $script:ManifestExtra }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $script:RunFolder 'run-manifest.json') -Encoding UTF8
     $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') -NoTypeInformation -Encoding UTF8
 }
@@ -379,7 +380,7 @@ try {
         $rag = Invoke-GraphGetAll -Uri 'https://graph.microsoft.com/v1.0/groups?$filter=isAssignableToRole eq true&$count=true&$select=id,displayName,createdDateTime,onPremisesSyncEnabled,securityEnabled,mailEnabled,description' -Eventual -Label 'roleAssignableGroups'
         $ragRows = foreach ($g in $rag) {
             $owners = @()
-            try { $owners = @(Invoke-GraphGetAll -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/owners?`$select=id,displayName,userPrincipalName" -f $g.id) -Label "owners $($g.id)") } catch { }
+            try { $owners = (Invoke-GraphGetAll -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/owners?`$select=id,displayName,userPrincipalName" -f $g.id) -Label "owners $($g.id)") } catch { }
             [pscustomobject][ordered]@{
                 GroupId          = $g.id
                 GroupName        = $g.displayName
