@@ -24,6 +24,7 @@ Rules live in [`tools/guardrail/rules.psd1`](../tools/guardrail/rules.psd1).
 - **Identifiers**: GUIDs (tenant, app, object), real `DC=` components, email addresses, `.gov` / `.local` /
   `.corp` / `onmicrosoft.com` / `sharepoint.com` names, IPv4 addresses, UNC paths, domain SIDs, ServiceNow
   ticket numbers, phone numbers, SSN-shaped numbers, user profile paths.
+- **AI attribution**: AI assistant names, co-author trailers and session links, in files and commit messages.
 - **Files**:
   - data, key and archive types (`.csv`, `.xlsx`, `.pfx`, `.pem`, `.log`, `.zip`, ...)
   - `*cred*.xml`, `*.local.psd1` and `.env`

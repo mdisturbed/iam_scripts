@@ -46,7 +46,9 @@
            Allow   = '(?i)^DC=(example|contoso|fabrikam|domain|corp|com|org|net|local|test)$' }
         @{ Id = 'id-email';              Description = 'Email address'
            Pattern = '\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b'
-           Allow   = '(?i)(^noreply@anthropic\.com$|@((.+\.)?(example|contoso|fabrikam)(-[a-z0-9]+)?\.[a-z.]+|users\.noreply\.github\.com)$)' }
+           Allow   = '(?i)(@((.+\.)?(example|contoso|fabrikam)(-[a-z0-9]+)?\.[a-z.]+|users\.noreply\.github\.com)$)' }
+        @{ Id = 'ai-attribution';        Description = 'AI assistant name or attribution (co-author trailer, session link)'
+           Pattern = '(?i)\bcl[a]ude\b|\banthr[o]pic\b' }
         @{ Id = 'id-internal-domain';    Description = 'Internal or government domain name'
            Pattern = '(?i)\b[a-z0-9-]+(\.[a-z0-9-]+)*\.(gov|mil|local|corp|internal|intranet|lan|onmicrosoft\.com|onmicrosoft\.us|sharepoint\.com)\b(?!\.?[A-Za-z0-9])'
            Allow   = '(?i)^((.+\.)?(example|contoso|fabrikam)(-[a-z0-9]+)?\.[a-z.]+|graph\.microsoft\.us)$' }

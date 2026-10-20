@@ -32,6 +32,7 @@ $bad = [ordered]@{
     'id-ticket-number'              = '# per INC' + '4815162'
     'id-us-phone'                   = 'call 401' + '-555-1234'
     'id-ssn'                        = 'ssn 078' + '-05-1120'
+    'ai-attribution'                = 'Co-Authored-By: Cla' + 'ude <noreply@anthr' + 'opic.com>'
     'id-user-profile-path'          = 'C:\Users\' + 'jdoe\Desktop\out.txt'
     'denylist-1'                    = 'Invoke-Command -ComputerName ACME' + 'CORP-APP01'
 }

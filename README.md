@@ -113,7 +113,7 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 4. Log each finding in Jira with the [finding template](docs/jira-finding-template.md); `tools/New-FindingEvidence.ps1` pre-fills the Evidence and Closure sections from the run folder.
 5. After remediation, rerun with the same parameters and compare summaries; that rerun is the finding's closure evidence.
 
-> **Contributing?** Run `.\tools\guardrail\Install-Guardrail.ps1` once after cloning. See [Guardrail](docs/guardrail.md).
+> **Contributing?** Read [CONTRIBUTING.md](CONTRIBUTING.md) and run `.\tools\guardrail\Install-Guardrail.ps1` once after cloning. See [Guardrail](docs/guardrail.md).
 
 ## Documentation
 
@@ -137,7 +137,7 @@ iam_scripts/
 ├── README.md                     this file
 ├── CHANGELOG.md                  version history
 ├── LICENSE                       MIT
-├── CLAUDE.md                     rules for AI sessions working in this repo
+├── CONTRIBUTING.md               rules for changing this repo (read before contributing)
 ├── .gitignore                    blocks evidence, keys and data exports from being committed
 ├── .githooks/                    pre-commit and commit-msg guardrail hooks
 ├── .github/workflows/            guardrail CI on every push (backstop for the hooks)

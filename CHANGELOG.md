@@ -10,7 +10,7 @@ Repository guardrail; no script changes.
 - `tools/guardrail/`: scanner (`Invoke-Guardrail.ps1`), rules (`rules.psd1`), Microsoft-published ID allowlist (`known-public-ids.txt`), private denylist template, one-time setup (`Install-Guardrail.ps1`) and a self-test (`Test-Guardrail.ps1`) that proves every rule fires and the placeholders pass.
 - `.githooks/pre-commit` and `.githooks/commit-msg`: scan staged files and the commit message; fail closed.
 - `.github/workflows/guardrail.yml`: self-test, full tree + commit message / author scan with the `GUARDRAIL_DENYLIST` secret, and gitleaks over the full history on every push and pull request.
-- `docs/guardrail.md` and `CLAUDE.md`.
+- `docs/guardrail.md` and `CONTRIBUTING.md`.
 
 ### Changed
 - `.gitignore`: also ignores the private denylist, `*.local.psd1`, `.env`, credential XML and more data / archive types.
