@@ -11,6 +11,9 @@ General issues first; script-specific issues follow, and also appear on each scr
 | Dataset `EvidenceUnavailable` mentioning a licence | Tenant lacks Entra ID P1/P2 | Record as a finding |
 | Repeated `HTTP 429` warnings | Throttling | Handled with back-off; large tenants take longer |
 | Execution policy blocks a script | Local policy | `Unblock-File`, or follow the approved signing process |
+| `Unable to find a default server with Active Directory Web Services running` | Device isn't domain-joined (Entra-joined) or no DC reachable | Pass `-Server <DC FQDN>`; see [Entra-joined devices](getting-started.md#entra-joined-devices) |
+| AD `Authentication failed` while ports 88 / 389 / 9389 to the DC are open | Device has no sign-in token (PRT) or the on-prem password differs | `dsregcmd /status`; service desk if `AzureAdPrt : NO` |
+| Launcher shows a script as **Blocked** | Module missing or DC didn't answer | Read the Detail column; `.\tools\Start-Discovery.ps1 -ListOnly -Server <DC>` rechecks |
 
 ## By script
 

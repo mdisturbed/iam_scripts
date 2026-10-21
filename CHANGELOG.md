@@ -2,6 +2,19 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.4.0 - 2026-10-21
+
+Launcher and report; no discovery-script changes.
+
+### Added
+- `tools/Start-Discovery.ps1` (1.0.0): readiness check for every script on this machine (AD module and DC, Graph / Exchange / Azure / AWS modules, input files), pick list (Out-GridView or console), runs the picks with `-Server` and `-OutputRoot`, asks for required input files and for SOC confirmation before 18, then a run summary (Completed / Partial / Failed / Skipped with the run folder). Unattended with `-Select` and `-ScriptParameters`.
+- `tools/New-DiscoveryReport.ps1` (1.0.0): one self-contained HTML page from the evidence folder: headline tiles, coverage of all 22 scripts with pilot status, summary metrics with change since the previous run, dataset statuses. Built from summaries only (counts, no names); run details only with `-IncludeRunDetails`.
+- `tools/discovery-catalog.psd1`: script list and what each needs, shared by the two tools.
+- Docs: launcher and report section and an Entra-joined devices section in `docs/getting-started.md`; troubleshooting rows.
+
+### Changed
+- `tools/Test-ReadOnly.ps1` 1.3.0: `Read` added to the read-only verbs (`Read-Host` reads keyboard input).
+
 ## 1.3.1 - 2026-10-20
 
 Repository guardrail; no script changes.

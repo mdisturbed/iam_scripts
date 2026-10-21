@@ -6,6 +6,8 @@ Everything needed before the first run: modules, access, sign-in, the parameters
 - [Authentication](#authentication)
 - [Common parameters](#common-parameters)
 - [Run everything](#run-everything)
+- [Launcher and report](#launcher-and-report)
+- [Entra-joined devices](#entra-joined-devices)
 - [Locked-down environments](#locked-down-environments)
 
 ## Prerequisites
@@ -117,6 +119,57 @@ Get-Help .\scripts\07-Get-RoleMiningCandidates.ps1 -Full
 ```
 
 Start with `summary.csv` in each run folder.
+
+## Launcher and report
+
+Two optional tools in `tools/`, both read-only (they pass `Test-ReadOnly.ps1`) and both work in Windows PowerShell 5.1 and PowerShell 7. No server or install needed.
+
+### Start-Discovery.ps1
+
+Checks what this machine can run, lets you pick, runs the picks in order, and summarizes.
+
+```powershell
+.\tools\Start-Discovery.ps1 -Server dc01.contoso.local -OutputRoot D:\Evidence            # pick list
+.\tools\Start-Discovery.ps1 -ListOnly -Server dc01.contoso.local                         # readiness only
+.\tools\Start-Discovery.ps1 -Server dc01.contoso.local -OutputRoot D:\Evidence -Select 05,04,07,08 -Report
+```
+
+| Status | Meaning |
+|--------|---------|
+| Ready | Everything it needs is here; runs without prompts |
+| Sign-in | Module present; you sign in (Graph, Exchange, Azure, AWS) when it runs |
+| Asks for files | Needs an HR / IGA / role export; the launcher asks for the path |
+| Check first | Runs, but has a caveat: 18 (tell the SOC first; the launcher asks) and 19 (Event Log Readers) |
+| Blocked | Missing module, or the DC didn't answer; the Detail column says which |
+
+- The pick list uses `Out-GridView` where it exists (Windows); otherwise, or with `-NoGridView`, it's a numbered prompt (`05,04,07`, or `ready`).
+- `-Select Ready` runs every **Ready** script unattended; **Check first** scripts must be named.
+- Extra parameters per script: `-ScriptParameters @{ '07' = @{ GroupingAttributes = 'department','title' }; '06' = @{ HrCsvPath = '.\hr.csv' } }`
+- Each script still writes its own timestamped run folder. The summary shows **Completed**, **Partial** (some datasets Blocked or EvidenceUnavailable), **Failed** or **Skipped**, and the run folder.
+- Set `-Server` once per session with `$PSDefaultParameterValues['*-AD*:Server'] = 'dc01.contoso.local'` and the launcher picks it up.
+
+### New-DiscoveryReport.ps1
+
+Builds one self-contained HTML page (`<OutputRoot>\discovery-report.html`) from the latest run of each script: headline tiles, a coverage table for all 22 scripts with pilot status from the [pilot runbook](pilot-runbook.md#sign-off), every summary metric with the change since the previous run, and every dataset's status. Open it in any browser; it adapts to dark mode and prints cleanly.
+
+```powershell
+.\tools\New-DiscoveryReport.ps1 -OutputRoot D:\Evidence
+.\tools\New-DiscoveryReport.ps1 -OutputRoot D:\Evidence -IncludeRunDetails   # adds run account, machine, domain, paths
+```
+
+It reads only `summary.csv`, `dataset-status.csv` and `run-manifest.json`, so the page holds counts, not names. It's still the organization's data: share it only through approved channels.
+
+## Entra-joined devices
+
+On a laptop that is joined to Entra ID but not to the on-prem domain (common for new devices), the AD tools have no default domain controller:
+
+| Symptom | Fix |
+|---------|-----|
+| `Unable to find a default server with Active Directory Web Services running` | Pass `-Server <DC FQDN>` to every AD script (or set `$PSDefaultParameterValues['*-AD*:Server']`) |
+| ADUC: "The specified domain either does not exist or could not be contacted" | Right-click **Active Directory Users and Computers** > **Change Domain Controller** (or **Change Domain**) and enter it by name |
+| `Authentication failed` with the DC reachable | Check the device has a sign-in token: `dsregcmd /status` should show `AzureAdPrt : YES`. If it's `NO`, the device or password state needs the service desk |
+
+Find a DC with `nltest /dsgetdc:<domain>` (needs VPN to the internal DNS), and confirm AD Web Services is reachable with `Test-NetConnection <DC> -Port 9389`.
 
 ## Locked-down environments
 

@@ -71,6 +71,15 @@ Get-Help .\scripts\07-Get-RoleMiningCandidates.ps1 -Full
 
 Open `summary.csv` in the run folder first. Every script with typical parameters is in [Getting started](docs/getting-started.md#run-everything).
 
+**Prefer a menu?** The launcher shows which scripts this machine can run, lets you tick them, runs them with the DC and evidence folder filled in, and can finish with a one-page HTML report (counts only, no names):
+
+```powershell
+.\tools\Start-Discovery.ps1 -Server dc01.contoso.local -OutputRoot D:\Evidence -Report
+.\tools\New-DiscoveryReport.ps1 -OutputRoot D:\Evidence        # rebuild the report any time
+```
+
+See [Launcher and report](docs/getting-started.md#launcher-and-report).
+
 ## Read-only guarantee
 
 1. **One Graph entry point.** All Graph traffic goes through `Invoke-GraphGet`, which calls `Invoke-MgGraphRequest -Method GET`.
@@ -109,7 +118,7 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 
 1. Run `Test-ReadOnly.ps1` and share the result with whoever approves the run.
 2. Pilot each script yourself using the [pilot runbook](docs/pilot-runbook.md).
-3. Collect each `summary.csv` into the status update, plus `dataset-status.csv` for anything `Blocked` or `EvidenceUnavailable`.
+3. Build the HTML report with `tools/New-DiscoveryReport.ps1` for the status update: headline metrics, change since the previous run, and every `Blocked` or `EvidenceUnavailable` dataset.
 4. Log each finding in Jira with the [finding template](docs/jira-finding-template.md); `tools/New-FindingEvidence.ps1` pre-fills the Evidence and Closure sections from the run folder.
 5. After remediation, rerun with the same parameters and compare summaries; that rerun is the finding's closure evidence.
 
@@ -144,6 +153,9 @@ iam_scripts/
 ├── scripts/                      the twenty-two discovery scripts (self-contained, run independently)
 ├── tools/
 │   ├── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
+│   ├── Start-Discovery.ps1       launcher: readiness check, pick list, runs scripts, run summary
+│   ├── New-DiscoveryReport.ps1   one-page HTML report from the evidence folder (counts only)
+│   ├── discovery-catalog.psd1    script list and what each needs, shared by the two above
 │   ├── New-FindingEvidence.ps1   pre-fills a Jira finding's Scope, Evidence and Closure from a run folder
 │   └── guardrail/                blocks identifying info and secrets from being committed (docs/guardrail.md)
 ├── examples/                     placeholder input templates for scripts 06, 14 and 15
