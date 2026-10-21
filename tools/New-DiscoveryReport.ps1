@@ -9,7 +9,7 @@
 
     The page shows:
       - headline tiles: scripts run, datasets completed / blocked / unavailable, scripts pilot-verified
-      - a coverage table for all 22 scripts: last run, version, dataset status, pilot status, number of runs
+      - a coverage table for every script in the catalog: last run, version, dataset status, pilot status, number of runs
       - per script: every summary metric with the change since the previous run, and every dataset's status
       - the scripts not run yet
 

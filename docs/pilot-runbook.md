@@ -19,7 +19,7 @@ Every script starts at **Mock-tested**. Record progress in the sign-off table at
 1. Run `.\tools\Test-ReadOnly.ps1` and keep the output; it's the reviewer's evidence that nothing writes to the directory.
 2. Confirm the permissions in [permissions.md](permissions.md) are granted, and note any that aren't. Missing permissions show up as `Blocked` datasets, not failures.
 3. Choose the evidence location. Use `-OutputRoot` to point there so nothing lands next to the scripts.
-4. Run outside business-critical windows for the AD scripts that read every object (05, 07, 08, 12, 13, 18), and for 19, which queries every DC's Security log.
+4. Run outside business-critical windows for the AD scripts that read every object (05, 07, 08, 12, 13, 18, 23), and for 19, which queries every DC's Security log.
 5. Before running 18 or 19, tell the SOC. ACL enumeration and remote event log reads can look like reconnaissance to EDR / identity threat detection.
 
 ## Order
@@ -29,7 +29,7 @@ Start with the scripts that need the least setup and give the clearest known ans
 1. **02** Entra privileged access, **01** MFA coverage
 2. **04** AD privileged accounts, **05** AD group nesting
 3. **03** apps and consents, **10** guests, **12** stale accounts, **13** sync scope
-4. **07** role mining, **08** extension attributes
+4. **07** role mining, **08** extension attributes, **23** attribute population
 5. **16** device posture, **21** identity risk, **22** PIM settings, **20** governance coverage
 6. **18** AD delegation, **19** DC authentication protocols (needs Event Log Readers)
 7. **09** mail and sharing (needs Exchange access), **11** Azure RBAC (needs Azure Reader), **17** AWS (needs the read-only role in each account)
@@ -72,6 +72,7 @@ Pick one or two facts per script that you can confirm independently in the porta
 | 20 Governance coverage | Number of access reviews in Identity Governance; one app you know is reviewed shows `Covered` |
 | 21 Identity risk | Risky user count in Entra ID Protection > Risky users |
 | 22 PIM role settings | Global Administrator settings in PIM > Entra roles > Settings |
+| 23 AD attribute population | `user objects scanned` matches `(Get-ADUser -Filter *).Count`; `sAMAccountName` shows 100% |
 
 ## Tuning on first run
 
@@ -89,6 +90,7 @@ Expect to adjust these on the first run and record the values used. They're writ
 | 19 | `-Hours` to fit how much Security log the DCs hold |
 | 20 | `-InScopeAppsCsv` once the certification scope list exists |
 | 22 | `-MaxActivationHours` to match the agreed standard |
+| 23 | `-ObjectClass`, `-EnabledOnly`, `-SearchBase` to limit load |
 | 14 | Column names, `-SystemName`, status value lists |
 
 ## Reporting a problem
@@ -137,3 +139,4 @@ When a script is pilot-verified, hand it over with:
 | 20 Governance coverage | 1.0.0 | | | | | Mock-tested |
 | 21 Identity risk | 1.0.0 | | | | | Mock-tested |
 | 22 PIM role settings | 1.0.0 | | | | | Mock-tested |
+| 23 AD attribute population | 1.0.0 | | | | | Mock-tested |

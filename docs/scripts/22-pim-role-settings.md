@@ -53,4 +53,4 @@ General issues: [troubleshooting](../troubleshooting.md).
 
 ---
 
-[← 21 Identity risk](21-identity-risk.md) · [All scripts](README.md)
+[← 21 Identity risk](21-identity-risk.md) · [All scripts](README.md) · [23 AD attribute population →](23-ad-attribute-population.md)

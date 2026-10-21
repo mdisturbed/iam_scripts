@@ -26,5 +26,6 @@ One page per script: what it collects, parameters, output files, permissions, pi
 | 20 | [Governance coverage](20-governance-coverage.md) | What share of apps, groups and roles is actually covered by access reviews? | Entra ID Governance | 1.0.0 |
 | 21 | [Identity risk](21-identity-risk.md) | Who is at risk right now, and does Conditional Access act on risk? | Entra ID Protection | 1.0.0 |
 | 22 | [PIM role settings](22-pim-role-settings.md) | What does it actually take to activate each admin role? | Entra PIM | 1.0.0 |
+| 23 | [AD attribute population](23-ad-attribute-population.md) | Which attributes does the schema allow, and how many objects actually have a value in each? | AD | 1.0.0 |
 
 [← Back to README](../../README.md)

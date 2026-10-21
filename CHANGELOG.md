@@ -2,6 +2,12 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.5.0 - 2026-10-21
+
+### Added
+- `23-Get-ADAttributePopulation.ps1` (1.0.0): every attribute the schema allows on users (and optionally groups and computers), resolved through superclasses and auxiliary classes, with populated count and %, total and distinct values, longest value, syntax, single/multi-valued, mandatory, defining class, global catalog, link type, system-only and confidential. Binary attributes counted by presence only; constructed, base-only and security-descriptor attributes reported as not counted; confidential zeros marked as possibly unreadable. No values written unless `-SampleValueCount` is set. Flag values from [MS-ADTS] 2.2.9 and 2.2.10.
+- Catalog entry for the launcher and report (shows as Check first: heavy read), script page, permissions, pilot check, tuning and sign-off rows.
+
 ## 1.4.0 - 2026-10-21
 
 Launcher and report; no discovery-script changes.

@@ -48,6 +48,7 @@ Each links to its page: what it collects, parameters, output files, permissions,
 | 20 | [Governance coverage](docs/scripts/20-governance-coverage.md) | What share of apps, groups and roles is actually covered by access reviews? | Entra ID Governance |
 | 21 | [Identity risk](docs/scripts/21-identity-risk.md) | Who is at risk right now, and does Conditional Access act on risk? | Entra ID Protection |
 | 22 | [PIM role settings](docs/scripts/22-pim-role-settings.md) | What does it actually take to activate each admin role? | Entra PIM |
+| 23 | [AD attribute population](docs/scripts/23-ad-attribute-population.md) | Which attributes does the schema allow, and how many objects actually have a value in each? | AD |
 
 The scripts gather facts. They do not score maturity or recommend fixes; that interpretation belongs in the analysis that uses the evidence.
 
@@ -113,7 +114,7 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 | AWS identity | 17 |
 | Certification coverage and PIM hardening | 20, 22 |
 | Current lifecycle and governance baseline | 06, 14 |
-| Groups and RBAC design | 05, 07, 08 |
+| Groups and RBAC design | 05, 07, 08, 23 |
 | After rule-based access goes live | 15 (scheduled), 06 and 12 (rerun) |
 
 1. Run `Test-ReadOnly.ps1` and share the result with whoever approves the run.
@@ -150,7 +151,7 @@ iam_scripts/
 ├── .gitignore                    blocks evidence, keys and data exports from being committed
 ├── .githooks/                    pre-commit and commit-msg guardrail hooks
 ├── .github/workflows/            guardrail CI on every push (backstop for the hooks)
-├── scripts/                      the twenty-two discovery scripts (self-contained, run independently)
+├── scripts/                      the twenty-three discovery scripts (self-contained, run independently)
 ├── tools/
 │   ├── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
 │   ├── Start-Discovery.ps1       launcher: readiness check, pick list, runs scripts, run summary

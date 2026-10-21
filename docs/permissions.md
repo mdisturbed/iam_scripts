@@ -28,6 +28,7 @@ Everything here is read-only. Ask for the narrowest option that works and, where
 | 20 Governance coverage | Global Reader | AccessReview.Read.All, EntitlementManagement.Read.All, Application.Read.All, Group.Read.All, GroupMember.Read.All, RoleManagement.Read.Directory | | Graph Auth |
 | 21 Identity risk | Security Reader or Global Reader | IdentityRiskyUser.Read.All, IdentityRiskEvent.Read.All, Policy.Read.All, RoleManagement.Read.Directory (+ IdentityRiskyServicePrincipal.Read.All) | | Graph Auth |
 | 22 PIM role settings | Global Reader | RoleManagementPolicy.Read.Directory, RoleManagement.Read.Directory | | Graph Auth |
+| 23 AD attribute population | | | Domain and schema read | RSAT AD |
 
 Items in brackets apply only when the matching optional switch is used.
 

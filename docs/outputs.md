@@ -64,5 +64,6 @@ The CSVs contain identity data (names, UPNs, sign-in activity, group membership,
 - [20 Governance coverage](scripts/20-governance-coverage.md#output): `access-review-definitions.csv`, `access-review-latest-decisions.csv`, `review-coverage.csv`, `access-packages.csv`
 - [21 Identity risk](scripts/21-identity-risk.md#output): `risky-users.csv`, `risk-detections.csv`, `risk-detections-by-type.csv`, `risky-service-principals.csv`, `ca-risk-policies.csv`
 - [22 PIM role settings](scripts/22-pim-role-settings.md#output): `pim-role-settings.csv`
+- [23 AD attribute population](scripts/23-ad-attribute-population.md#output): `attribute-population.csv`, `schema-class-closure.csv`
 
 [← Back to README](../README.md)

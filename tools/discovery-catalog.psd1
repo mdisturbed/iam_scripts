@@ -34,5 +34,6 @@
         @{ Number = '20'; Title = 'Governance coverage';                  Area = 'Entra';      Needs = @('Graph') }
         @{ Number = '21'; Title = 'Identity risk';                        Area = 'Entra';      Needs = @('Graph') }
         @{ Number = '22'; Title = 'PIM role settings';                    Area = 'Entra';      Needs = @('Graph') }
+        @{ Number = '23'; Title = 'AD attribute population';              Area = 'AD';         Needs = @('AD'); Note = 'Heavy: reads every attribute of every object. Run off-peak.' }
     )
 }
