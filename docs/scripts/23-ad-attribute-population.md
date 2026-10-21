@@ -1,6 +1,6 @@
 # 23 - AD attribute population
 
-**Script:** [`23-Get-ADAttributePopulation.ps1`](../../scripts/23-Get-ADAttributePopulation.ps1) · **Version:** 1.0.0 · **Source:** AD (schema + objects)
+**Script:** [`23-Get-ADAttributePopulation.ps1`](../../scripts/23-Get-ADAttributePopulation.ps1) · **Version:** 1.0.1 · **Source:** AD (schema + objects)
 
 > Which attributes does the schema allow on users, groups and computers, and how many objects actually have a value in each?
 

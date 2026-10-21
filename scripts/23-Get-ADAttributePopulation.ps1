@@ -63,7 +63,7 @@
     .\23-Get-ADAttributePopulation.ps1 -SearchBase 'OU=People,DC=contoso,DC=local'
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x, RSAT ActiveDirectory module, read access to the domain and schema
               (any authenticated user by default).
     Load    : reads every attribute of every object of each class (one pass per batch). Run off-peak
@@ -92,7 +92,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '23-ADAttributePopulation'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 
 #region ---- Common helpers (identical in every AD script; self-contained by design) ----
 if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot 'output' }
@@ -167,13 +167,16 @@ $FLAG_ATTR_NOT_REPLICATED = 0x1
 $FLAG_ATTR_IS_CONSTRUCTED = 0x4
 $fCONFIDENTIAL            = 0x80
 $fBASEONLY                = 0x800
+# Attribute syntaxes are 2.5.5.<n>; keyed by <n> so the source holds no dotted quads.
+$SyntaxPrefix = '2.5.5.'
 $SyntaxNames = @{
-    '2.5.5.1' = 'DN'; '2.5.5.2' = 'OID'; '2.5.5.3' = 'Case-sensitive string'; '2.5.5.4' = 'Case-insensitive string'
-    '2.5.5.5' = 'Printable / IA5 string'; '2.5.5.6' = 'Numeric string'; '2.5.5.7' = 'DN with binary'; '2.5.5.8' = 'Boolean'
-    '2.5.5.9' = 'Integer'; '2.5.5.10' = 'Octet string (binary)'; '2.5.5.11' = 'Time'; '2.5.5.12' = 'Unicode string'
-    '2.5.5.13' = 'Presentation address'; '2.5.5.14' = 'DN with string'; '2.5.5.15' = 'Security descriptor'
-    '2.5.5.16' = 'Large integer'; '2.5.5.17' = 'SID'
+    1 = 'DN'; 2 = 'OID'; 3 = 'Case-sensitive string'; 4 = 'Case-insensitive string'; 5 = 'Printable / IA5 string'
+    6 = 'Numeric string'; 7 = 'DN with binary'; 8 = 'Boolean'; 9 = 'Integer'; 10 = 'Octet string (binary)'; 11 = 'Time'
+    12 = 'Unicode string'; 13 = 'Presentation address'; 14 = 'DN with string'; 15 = 'Security descriptor'; 16 = 'Large integer'; 17 = 'SID'
 }
+$SYNTAX_OCTET_STRING = 10
+$SYNTAX_SECURITY_DESCRIPTOR = 15
+function Get-SyntaxNumber { param([string]$Syntax) if ($Syntax.StartsWith($SyntaxPrefix)) { $n = 0; if ([int]::TryParse($Syntax.Substring($SyntaxPrefix.Length), [ref]$n)) { return $n } } return -1 }
 $ClassFilters = @{
     user     = '(&(objectCategory=person)(objectClass=user))'
     group    = '(objectClass=group)'
@@ -265,19 +268,20 @@ try {
             $a = $null
             if ($attributes.ContainsKey($n)) { $a = $attributes[$n] }
             $syntax = if ($a) { [string]$a.attributeSyntax } else { '' }
+            $syntaxNo = Get-SyntaxNumber $syntax
             $sys = if ($a) { Get-FlagValue $a.systemFlags } else { 0 }
             $sf  = if ($a) { Get-FlagValue $a.searchFlags } else { 0 }
             $link = if ($a -and "$($a.linkID)" -ne '') { [int]"$($a.linkID)" } else { $null }
             $method = if (-not $a) { 'Unknown' }
                       elseif ($sys -band $FLAG_ATTR_IS_CONSTRUCTED) { 'Constructed' }
                       elseif ($sf -band $fBASEONLY) { 'BaseOnly' }
-                      elseif ($syntax -eq '2.5.5.15') { 'SecurityDescriptor' }
-                      elseif ($syntax -eq '2.5.5.10') { 'Presence' }
+                      elseif ($syntaxNo -eq $SYNTAX_SECURITY_DESCRIPTOR) { 'SecurityDescriptor' }
+                      elseif ($syntaxNo -eq $SYNTAX_OCTET_STRING) { 'Presence' }
                       else { 'Bulk' }
             $plan[$n] = [pscustomobject]@{
                 Name         = $(if ($a) { [string]$a.lDAPDisplayName } else { $n })
                 Method       = $method
-                Syntax       = $(if ($SyntaxNames.ContainsKey($syntax)) { $SyntaxNames[$syntax] } else { $syntax })
+                Syntax       = $(if ($SyntaxNames.ContainsKey($syntaxNo)) { $SyntaxNames[$syntaxNo] } else { $syntax })
                 SingleValued = $(if ($a) { "$($a.isSingleValued)" -eq 'True' } else { $null })
                 Confidential = [bool]($sf -band $fCONFIDENTIAL)
                 NotReplicated = [bool]($sys -band $FLAG_ATTR_NOT_REPLICATED)

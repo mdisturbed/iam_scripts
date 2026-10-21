@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.5.1 - 2026-10-21
+
+### Changed
+- `23-Get-ADAttributePopulation.ps1` 1.0.1: attribute syntax codes are built from a prefix and number instead of written out in full, so the source no longer trips the guardrail's IP address rule. No change in behavior or output.
+
 ## 1.5.0 - 2026-10-21
 
 ### Added

@@ -139,4 +139,4 @@ When a script is pilot-verified, hand it over with:
 | 20 Governance coverage | 1.0.0 | | | | | Mock-tested |
 | 21 Identity risk | 1.0.0 | | | | | Mock-tested |
 | 22 PIM role settings | 1.0.0 | | | | | Mock-tested |
-| 23 AD attribute population | 1.0.0 | | | | | Mock-tested |
+| 23 AD attribute population | 1.0.1 | | | | | Mock-tested |
