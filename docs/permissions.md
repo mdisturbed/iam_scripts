@@ -29,6 +29,9 @@ Everything here is read-only. Ask for the narrowest option that works and, where
 | 21 Identity risk | Security Reader or Global Reader | IdentityRiskyUser.Read.All, IdentityRiskEvent.Read.All, Policy.Read.All, RoleManagement.Read.Directory (+ IdentityRiskyServicePrincipal.Read.All) | | Graph Auth |
 | 22 PIM role settings | Global Reader | RoleManagementPolicy.Read.Directory, RoleManagement.Read.Directory | | Graph Auth |
 | 23 AD attribute population | | | Domain and schema read | RSAT AD |
+| 24 CA report-only impact | Global Reader or Security Reader | Policy.Read.All, AuditLog.Read.All | | Graph Auth |
+| 25 Purview classification and DLP | Global Reader | | Purview Global Reader role group; Information Protection Readers + Content Explorer List viewer for `-IncludeContentExplorer` | ExchangeOnlineManagement |
+| 26 PAM vault coverage | | | PAM account export; earlier runs of 02 / 04 / 11 / 17 | none |
 
 Items in brackets apply only when the matching optional switch is used.
 
@@ -60,8 +63,8 @@ All scopes used anywhere in the repository:
 | `RoleManagementPolicy.Read.Directory` | 22 |
 | `User.Read.All` | 06, 10, 12, 13 |
 | `Group.Read.All` | 13, 20 |
-| `Policy.Read.All` | 01, 03, 10, 16, 21 |
-| `AuditLog.Read.All` | 01, 02, 03, 06, 10, 12 |
+| `Policy.Read.All` | 01, 03, 10, 16, 21, 24 |
+| `AuditLog.Read.All` | 01, 02, 03, 06, 10, 12, 24 |
 | `UserAuthenticationMethod.Read.All` | 01, 02 |
 | `RoleManagement.Read.Directory` | 02, 20, 21, 22 |
 | `Application.Read.All` | 03, 08, 20 |
@@ -99,6 +102,15 @@ All scopes used anywhere in the repository:
 | Role | Global Reader, or Exchange **View-Only Organization Management** |
 | Module | `ExchangeOnlineManagement` v3 |
 | App-only | Exchange.ManageAsApp application permission plus an Exchange role assigned to the app's service principal; run with `-AuthMode AppCertificate -ExchangeOrganization contoso.onmicrosoft.com -ClientId ... -CertificateThumbprint ...` |
+
+## Microsoft Purview (script 25)
+
+| Need | Detail |
+|------|--------|
+| Labels, label and auto-labeling policies, DLP policies and rules, sensitive information types | Purview **Global Reader** role group (Entra Global Reader maps to it) |
+| Content Explorer counts (`-IncludeContentExplorer`) | **Information Protection Readers** role group and **Content Explorer List viewer**. Content viewer is not needed: the script keeps totals only, never item names |
+| Module | `ExchangeOnlineManagement` v3 (`Connect-IPPSSession`) |
+| App-only | Run with `-AuthMode AppCertificate -Organization contoso.onmicrosoft.com -ClientId ... -CertificateThumbprint ...`; the app's service principal needs the same role groups |
 
 ## Azure (script 11)
 

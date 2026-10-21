@@ -65,5 +65,8 @@ The CSVs contain identity data (names, UPNs, sign-in activity, group membership,
 - [21 Identity risk](scripts/21-identity-risk.md#output): `risky-users.csv`, `risk-detections.csv`, `risk-detections-by-type.csv`, `risky-service-principals.csv`, `ca-risk-policies.csv`
 - [22 PIM role settings](scripts/22-pim-role-settings.md#output): `pim-role-settings.csv`
 - [23 AD attribute population](scripts/23-ad-attribute-population.md#output): `attribute-population.csv`, `schema-class-closure.csv`
+- [24 CA report-only impact](scripts/24-ca-reportonly-impact.md#output): `ca-policy-results.csv`, `ca-reportonly-impact.csv`
+- [25 Purview classification and DLP](scripts/25-purview-classification.md#output): `purview-sensitivity-labels.csv`, `purview-label-policies.csv`, `purview-autolabel-policies.csv`, `purview-autolabel-rules.csv`, `purview-dlp-policies.csv`, `purview-dlp-rules.csv`, `purview-sensitive-info-types.csv`, `purview-content-explorer-counts.csv`
+- [26 PAM vault coverage](scripts/26-pam-vault-coverage.md#output): `privileged-vault-coverage.csv`, `pam-entries-unmatched.csv`, `source-runs.csv`
 
 [← Back to README](../README.md)

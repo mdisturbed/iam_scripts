@@ -49,6 +49,9 @@ Each links to its page: what it collects, parameters, output files, permissions,
 | 21 | [Identity risk](docs/scripts/21-identity-risk.md) | Who is at risk right now, and does Conditional Access act on risk? | Entra ID Protection |
 | 22 | [PIM role settings](docs/scripts/22-pim-role-settings.md) | What does it actually take to activate each admin role? | Entra PIM |
 | 23 | [AD attribute population](docs/scripts/23-ad-attribute-population.md) | Which attributes does the schema allow, and how many objects actually have a value in each? | AD |
+| 24 | [CA report-only impact](docs/scripts/24-ca-reportonly-impact.md) | Who would a report-only Conditional Access policy block or challenge if it were switched on? | Entra sign-in logs |
+| 25 | [Purview classification and DLP](docs/scripts/25-purview-classification.md) | What can classify regulated data, what is switched on, and how much tagged content exists where? | Microsoft Purview |
+| 26 | [PAM vault coverage](docs/scripts/26-pam-vault-coverage.md) | Which privileged accounts are managed in the PAM vault, and which are not? | PAM export + 02/04/11/17 |
 
 The scripts gather facts. They do not score maturity or recommend fixes; that interpretation belongs in the analysis that uses the evidence.
 
@@ -105,11 +108,11 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 
 | Goal | Scripts |
 |------|---------|
-| MFA coverage | 01 |
-| Privileged and service account sprawl | 02, 04, 11, 17, 18, 22 |
-| "Where is my data going" | 03, 09, 10 |
+| MFA coverage | 01, 24 |
+| Privileged and service account sprawl | 02, 04, 11, 17, 18, 22, 26 |
+| "Where is my data going" | 03, 09, 10, 25 |
 | Stale and orphaned identities | 12, 13, 06, 10 |
-| Devices and Conditional Access | 16, 01, 21 |
+| Devices and Conditional Access | 16, 01, 21, 24 |
 | AD attack paths and legacy protocols | 18, 19, 04 |
 | AWS identity | 17 |
 | Certification coverage and PIM hardening | 20, 22 |
@@ -151,7 +154,7 @@ iam_scripts/
 ├── .gitignore                    blocks evidence, keys and data exports from being committed
 ├── .githooks/                    pre-commit and commit-msg guardrail hooks
 ├── .github/workflows/            guardrail CI on every push (backstop for the hooks)
-├── scripts/                      the twenty-three discovery scripts (self-contained, run independently)
+├── scripts/                      the twenty-six discovery scripts (self-contained, run independently)
 ├── tools/
 │   ├── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
 │   ├── Start-Discovery.ps1       launcher: readiness check, pick list, runs scripts, run summary
@@ -159,10 +162,11 @@ iam_scripts/
 │   ├── discovery-catalog.psd1    script list and what each needs, shared by the two above
 │   ├── New-FindingEvidence.ps1   pre-fills a Jira finding's Scope, Evidence and Closure from a run folder
 │   └── guardrail/                blocks identifying info and secrets from being committed (docs/guardrail.md)
-├── examples/                     placeholder input templates for scripts 06, 14 and 15
+├── examples/                     placeholder input templates for scripts 06, 14, 15 and 26
 │   ├── hr.example.csv
 │   ├── iga-accounts.example.csv
 │   ├── iga-assignments.example.csv
+│   ├── pam-accounts.example.csv
 │   ├── role-definitions.example.csv
 │   └── rule-map.example.csv
 └── docs/

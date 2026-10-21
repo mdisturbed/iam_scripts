@@ -1,0 +1,5 @@
+UserName,Address,PlatformId,SafeName,LastVerified
+User1,contoso.local,WindowsDomainAccount,Safe-Tier0,2026-10-01
+CONTOSO\User2,contoso.local,WindowsDomainAccount,Safe-Tier0,2026-10-01
+admin1@contoso.local,,EntraIdAccount,Safe-Cloud,2026-09-15
+App1-deploy,000000000000,AwsIamUser,Safe-Aws,

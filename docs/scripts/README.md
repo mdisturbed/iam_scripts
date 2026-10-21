@@ -26,6 +26,9 @@ One page per script: what it collects, parameters, output files, permissions, pi
 | 20 | [Governance coverage](20-governance-coverage.md) | What share of apps, groups and roles is actually covered by access reviews? | Entra ID Governance | 1.0.0 |
 | 21 | [Identity risk](21-identity-risk.md) | Who is at risk right now, and does Conditional Access act on risk? | Entra ID Protection | 1.0.0 |
 | 22 | [PIM role settings](22-pim-role-settings.md) | What does it actually take to activate each admin role? | Entra PIM | 1.0.0 |
-| 23 | [AD attribute population](23-ad-attribute-population.md) | Which attributes does the schema allow, and how many objects actually have a value in each? | AD | 1.0.1 |
+| 23 | [AD attribute population](23-ad-attribute-population.md) | Which attributes does the schema allow, and how many objects actually have a value in each? | AD | 1.1.0 |
+| 24 | [CA report-only impact](24-ca-reportonly-impact.md) | Who would a report-only Conditional Access policy block or challenge if it were switched on? | Entra sign-in logs | 1.0.0 |
+| 25 | [Purview classification and DLP](25-purview-classification.md) | What can classify regulated data, what is switched on, and how much tagged content exists where? | Microsoft Purview | 1.0.0 |
+| 26 | [PAM vault coverage](26-pam-vault-coverage.md) | Which privileged accounts are managed in the PAM vault, and which are not? | PAM export + 02/04/11/17 | 1.0.0 |
 
 [← Back to README](../../README.md)

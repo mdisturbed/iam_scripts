@@ -2,6 +2,19 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.6.0 - 2026-10-21
+
+Closes the gaps found when aligning the scripts to the engagement scope (Conditional Access staging, Purview classification evidence, PAM coverage).
+
+### Added
+- `24-Get-CaReportOnlyImpact.ps1` (1.0.0): per Conditional Access policy, what it did or would have done to real sign-ins: every result count, users a report-only policy would block or interrupt, top apps, and one row per policy, user and app to work through before enforcing. Sends `Prefer: include-unknown-enum-members` (required for report-only results); reports policies deleted since the sign-ins; optional non-interactive sign-ins (beta).
+- `25-Get-PurviewClassification.ps1` (1.0.0): sensitivity labels and label policies, auto-labeling policies and rules, DLP policies (mode: on / simulation / off) and rules (sensitive information types, actions), sensitive information types with custom ones flagged, and optional Content Explorer totals per tag and workload. Totals come from response metadata only: no item names, paths or senders are kept; locations are summarised, never listed.
+- `26-Compare-PamVaultCoverage.ps1` (1.0.0): privileged accounts from the latest runs of 02, 04, 11 and 17 checked against a PAM vault export: vaulted or not, Tier 0 not vaulted, name-only matches to check, AWS account-aware matching, vault entries matching no privileged account, and SHA-256 of every input.
+- `examples/pam-accounts.example.csv`; script pages, permissions (Purview section), pilot checks, tuning and sign-off rows; catalog entries for the launcher and report.
+
+### Changed
+- `23-Get-ADAttributePopulation.ps1` 1.1.0: inventories users, groups and computers by default (`-ObjectClass user` to narrow).
+
 ## 1.5.1 - 2026-10-21
 
 ### Changed

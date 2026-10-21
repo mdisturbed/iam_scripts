@@ -30,6 +30,7 @@ Start with the scripts that need the least setup and give the clearest known ans
 2. **04** AD privileged accounts, **05** AD group nesting
 3. **03** apps and consents, **10** guests, **12** stale accounts, **13** sync scope
 4. **07** role mining, **08** extension attributes, **23** attribute population
+5. **24** CA report-only impact (after 01), **25** Purview (needs Purview roles), **26** PAM coverage (after 02, 04, 11, 17 and a PAM export)
 5. **16** device posture, **21** identity risk, **22** PIM settings, **20** governance coverage
 6. **18** AD delegation, **19** DC authentication protocols (needs Event Log Readers)
 7. **09** mail and sharing (needs Exchange access), **11** Azure RBAC (needs Azure Reader), **17** AWS (needs the read-only role in each account)
@@ -73,6 +74,9 @@ Pick one or two facts per script that you can confirm independently in the porta
 | 21 Identity risk | Risky user count in Entra ID Protection > Risky users |
 | 22 PIM role settings | Global Administrator settings in PIM > Entra roles > Settings |
 | 23 AD attribute population | `user objects scanned` matches `(Get-ADUser -Filter *).Count`; `sAMAccountName` shows 100% |
+| 24 CA report-only impact | One report-only policy's result for a user and day matches the sign-in's **Report-only** tab in the Entra portal |
+| 25 Purview classification | DLP policy count and modes match **Purview > Data loss prevention > Policies** |
+| 26 PAM vault coverage | One known vaulted account shows `Vaulted = True` with the right safe; one known unvaulted shows `NotVaulted` |
 
 ## Tuning on first run
 
@@ -90,7 +94,10 @@ Expect to adjust these on the first run and record the values used. They're writ
 | 19 | `-Hours` to fit how much Security log the DCs hold |
 | 20 | `-InScopeAppsCsv` once the certification scope list exists |
 | 22 | `-MaxActivationHours` to match the agreed standard |
-| 23 | `-ObjectClass`, `-EnabledOnly`, `-SearchBase` to limit load |
+| 23 | `-ObjectClass user`, `-EnabledOnly`, `-SearchBase` to limit load |
+| 24 | `-SignInLookbackDays`, `-MaxSignInRecords` |
+| 25 | `-ContentExplorerSits` to the organization's list |
+| 26 | `-Pam*Column` mappings to the export's headers |
 | 14 | Column names, `-SystemName`, status value lists |
 
 ## Reporting a problem
@@ -139,4 +146,7 @@ When a script is pilot-verified, hand it over with:
 | 20 Governance coverage | 1.0.0 | | | | | Mock-tested |
 | 21 Identity risk | 1.0.0 | | | | | Mock-tested |
 | 22 PIM role settings | 1.0.0 | | | | | Mock-tested |
-| 23 AD attribute population | 1.0.1 | | | | | Mock-tested |
+| 23 AD attribute population | 1.1.0 | | | | | Mock-tested |
+| 24 CA report-only impact | 1.0.0 | | | | | Mock-tested |
+| 25 Purview classification and DLP | 1.0.0 | | | | | Mock-tested |
+| 26 PAM vault coverage | 1.0.0 | | | | | Mock-tested |

@@ -17,9 +17,9 @@ Everything needed before the first run: modules, access, sign-in, the parameters
 | Need | Scripts | Notes |
 |------|---------|-------|
 | PowerShell 5.1 or 7.x | All | Written for both; tested on 7.4 |
-| `Microsoft.Graph.Authentication` | 01, 02, 03, 10, 11, 12, 13, 16, 20, 21, 22; 06 / 08 / 09 optionally | The only Graph module needed; all calls are raw `GET` requests |
+| `Microsoft.Graph.Authentication` | 01, 02, 03, 10, 11, 12, 13, 16, 20, 21, 22, 24; 06 / 08 / 09 optionally | The only Graph module needed; all calls are raw `GET` requests |
 | RSAT `ActiveDirectory` | 04, 05, 06, 07, 08, 12, 13, 14, 15, 18, 19, 23 | Read access with a standard domain account is normally enough |
-| `ExchangeOnlineManagement` v3 | 09 | Uses `Get-EXOMailbox` / `Get-EXORecipient` |
+| `ExchangeOnlineManagement` v3 | 09, 25 | 09: `Get-EXOMailbox` / `Get-EXORecipient`; 25: Security & Compliance (`Connect-IPPSSession`) |
 | `Microsoft.Online.SharePoint.PowerShell` | 09 with `-IncludeSiteSharing` | Windows PowerShell 5.1 |
 | `Az.Accounts` | 11 | Only `Connect-AzAccount`, `Get-AzContext` and `Invoke-AzRestMethod -Method GET` |
 | AWS Tools for PowerShell | 17 | `AWS.Tools.Common`, `.SecurityToken`, `.IdentityManagement`; plus `.Organizations`, `.SSOAdmin`, `.IdentityStore`, `.AccessAnalyzer` for the optional parts |
@@ -105,7 +105,12 @@ Every script with typical parameters. Point `-OutputRoot` at the approved eviden
 # 6. AD permissions and legacy authentication
 .\scripts\18-Get-ADDelegation.ps1             -OutputRoot D:\Evidence
 .\scripts\19-Get-DcAuthProtocolUsage.ps1      -Hours 24 -OutputRoot D:\Evidence
-.\scripts\23-Get-ADAttributePopulation.ps1    -ObjectClass user,group,computer -OutputRoot D:\Evidence
+.\scripts\23-Get-ADAttributePopulation.ps1    -OutputRoot D:\Evidence
+
+# 7a. Conditional Access staging, Purview, PAM coverage
+.\scripts\24-Get-CaReportOnlyImpact.ps1       -SignInLookbackDays 14 -OutputRoot D:\Evidence
+.\scripts\25-Get-PurviewClassification.ps1    -IncludeContentExplorer -OutputRoot D:\Evidence
+.\scripts\26-Compare-PamVaultCoverage.ps1     -PamExportCsv .\pam-accounts.csv -OutputRoot D:\Evidence
 
 # 7. AWS (credential profile, or a read-only role in every account)
 .\scripts\17-Get-AwsIamPosture.ps1 -ProfileName audit -AllOrganizationAccounts -AssumeRoleName IAMDiscoveryReadOnly -IncludeIdentityCenter -OutputRoot D:\Evidence

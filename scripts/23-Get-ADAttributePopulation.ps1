@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Read-only inventory of every attribute the AD schema allows on users (and optionally groups and
-    computers), with how many objects actually have a value in each.
+    Read-only inventory of every attribute the AD schema allows on users, groups and computers, with
+    how many objects actually have a value in each.
 
 .DESCRIPTION
     Answers "what is really populated in this directory, and what isn't" before attributes are
@@ -37,7 +37,8 @@
     Output: <OutputRoot>\23-ADAttributePopulation\<yyyyMMdd-HHmmssZ>\*.csv + run-manifest.json + run.log
 
 .PARAMETER ObjectClass
-    Which classes to inventory: user (default), group, computer, or several.
+    Which classes to inventory: user, group, computer (default: all three). -ObjectClass user alone
+    is lighter.
 
 .PARAMETER EnabledOnly
     Users and computers: only enabled accounts.
@@ -58,16 +59,16 @@
 .EXAMPLE
     .\23-Get-ADAttributePopulation.ps1 -Server DC1.contoso.local
 .EXAMPLE
-    .\23-Get-ADAttributePopulation.ps1 -Server DC1.contoso.local -ObjectClass user,group,computer -EnabledOnly
+    .\23-Get-ADAttributePopulation.ps1 -Server DC1.contoso.local -ObjectClass user -EnabledOnly
 .EXAMPLE
     .\23-Get-ADAttributePopulation.ps1 -SearchBase 'OU=People,DC=contoso,DC=local'
 
 .NOTES
-    Version : 1.0.1
+    Version : 1.1.0
     Requires: PowerShell 5.1 or 7.x, RSAT ActiveDirectory module, read access to the domain and schema
               (any authenticated user by default).
     Load    : reads every attribute of every object of each class (one pass per batch). Run off-peak
-              in large domains; -SearchBase or -ObjectClass user alone keeps it lighter.
+              in large domains; -SearchBase or -ObjectClass user keeps it lighter.
     Sources : searchFlags and systemFlags bits from [MS-ADTS] 2.2.9 and 2.2.10; attribute syntaxes from
               the Active Directory syntax table (attributeSyntax 2.5.5.x).
 #>
@@ -78,7 +79,7 @@ param(
     [string]$Server = '',                                   # e.g. 'dc01.contoso.local'
     [string]$SearchBase = '',                               # blank = whole domain
     [ValidateSet('user', 'group', 'computer')]
-    [string[]]$ObjectClass = @('user'),
+    [string[]]$ObjectClass = @('user', 'group', 'computer'),
     [switch]$EnabledOnly,
     [ValidateRange(0, 20)]
     [int]$SampleValueCount = 0,
@@ -92,7 +93,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '23-ADAttributePopulation'
-$ScriptVersion = '1.0.1'
+$ScriptVersion = '1.1.0'
 
 #region ---- Common helpers (identical in every AD script; self-contained by design) ----
 if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot 'output' }

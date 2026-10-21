@@ -35,5 +35,8 @@
         @{ Number = '21'; Title = 'Identity risk';                        Area = 'Entra';      Needs = @('Graph') }
         @{ Number = '22'; Title = 'PIM role settings';                    Area = 'Entra';      Needs = @('Graph') }
         @{ Number = '23'; Title = 'AD attribute population';              Area = 'AD';         Needs = @('AD'); Note = 'Heavy: reads every attribute of every object. Run off-peak.' }
+        @{ Number = '24'; Title = 'CA report-only impact';                Area = 'Entra';      Needs = @('Graph') }
+        @{ Number = '25'; Title = 'Purview classification and DLP';       Area = 'Data protection'; Needs = @('Exchange') }
+        @{ Number = '26'; Title = 'PAM vault coverage';                   Area = 'Privileged access'; Needs = @('InputFile'); Note = 'Run after 02, 04, 11 and 17 into the same evidence folder.' }
     )
 }

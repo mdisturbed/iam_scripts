@@ -1,6 +1,6 @@
 # 23 - AD attribute population
 
-**Script:** [`23-Get-ADAttributePopulation.ps1`](../../scripts/23-Get-ADAttributePopulation.ps1) · **Version:** 1.0.1 · **Source:** AD (schema + objects)
+**Script:** [`23-Get-ADAttributePopulation.ps1`](../../scripts/23-Get-ADAttributePopulation.ps1) · **Version:** 1.1.0 · **Source:** AD (schema + objects)
 
 > Which attributes does the schema allow on users, groups and computers, and how many objects actually have a value in each?
 
@@ -15,7 +15,7 @@ Where 08 profiles the spare attributes you might claim, this inventories **every
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
-| `-ObjectClass` | `user` | `user`, `group`, `computer`, or several |
+| `-ObjectClass` | `user`, `group`, `computer` | Any of the three; `-ObjectClass user` alone is lighter |
 | `-EnabledOnly` | off | Users and computers: enabled accounts only |
 | `-SampleValueCount` | `0` | Most common values per attribute. Off by default: directory-wide values are personal data |
 | `-DistinctValueCap` | `1000` | Stop counting distinct values above this (shown as `1000+`) |
@@ -58,7 +58,7 @@ Full detail: [permissions](../permissions.md).
 
 Before handing this script to others, confirm: `user objects scanned` matches `(Get-ADUser -Filter * -Server <DC>).Count`, and one attribute you know is fully populated (e.g. `sAMAccountName`) shows 100%.
 
-Usually tuned on first run: `-ObjectClass`, `-EnabledOnly`, `-SearchBase` to limit load. See the [pilot runbook](../pilot-runbook.md).
+Usually tuned on first run: `-ObjectClass user`, `-EnabledOnly`, `-SearchBase` to limit load. See the [pilot runbook](../pilot-runbook.md).
 
 ## Troubleshooting
 
@@ -71,4 +71,4 @@ General issues: [troubleshooting](../troubleshooting.md).
 
 ---
 
-[← 22 PIM role settings](22-pim-role-settings.md) · [All scripts](README.md)
+[← 22 PIM role settings](22-pim-role-settings.md) · [All scripts](README.md) · [24 CA report-only impact →](24-ca-reportonly-impact.md)
