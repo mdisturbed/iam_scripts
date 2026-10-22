@@ -39,7 +39,7 @@
     .\tools\New-DiscoveryReport.ps1 -OutputRoot $env:USERPROFILE\IAM-Evidence
 
 .NOTES
-    Version: 1.0.0
+    Version: 1.0.1
 #>
 [CmdletBinding()]
 param(
@@ -50,7 +50,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$ReportVersion = '1.0.0'
+$ReportVersion = '1.0.1'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $catalog  = (Import-PowerShellDataFile -Path (Join-Path $PSScriptRoot 'discovery-catalog.psd1')).Scripts
 $inv      = [Globalization.CultureInfo]::InvariantCulture
@@ -130,7 +130,7 @@ $nPilot     = @($entries | Where-Object { $_.Pilot -and $_.Pilot.Status -match '
 
 function Get-StatusChip {
     param([string]$Status, [int]$Count = -1)
-    $cls = switch ($Status) { 'Completed' { 'ok' } 'Blocked' { 'bad' } 'EvidenceUnavailable' { 'warn' } 'Deferred' { 'muted' } default { 'muted' } }
+    $cls = switch ($Status) { 'Completed' { 'ok' } 'Blocked' { 'bad' } 'EvidenceUnavailable' { 'warn' } 'Partial' { 'warn' } 'Deferred' { 'muted' } default { 'muted' } }
     $label = switch ($Status) { 'EvidenceUnavailable' { 'Unavailable' } default { $Status } }
     if ($Count -ge 0) { $label = "$Count $label" }
     return "<span class=""chip $cls"">$(ConvertTo-HtmlText $label)</span>"
@@ -232,7 +232,7 @@ if ($IncludeRunDetails) { [void]$sb.Append("<p class=""note"">Evidence folder: $
 foreach ($e in $entries) {
     if ($e.Latest) {
         $groups = $e.Datasets | Group-Object Status
-        $chips = (@('Completed', 'Blocked', 'EvidenceUnavailable', 'Deferred') | ForEach-Object {
+        $chips = (@('Completed', 'Partial', 'Blocked', 'EvidenceUnavailable', 'Deferred') | ForEach-Object {
                 $st = $_; $g = $groups | Where-Object Name -eq $st
                 if ($g) { Get-StatusChip -Status $st -Count $g.Count }
             }) -join ''
@@ -253,7 +253,7 @@ foreach ($area in $areas) {
     [void]$sb.Append("<section class=""area""><h2>$(ConvertTo-HtmlText $area)</h2>`n")
     foreach ($e in $inArea) {
         $groups = $e.Datasets | Group-Object Status
-        $chips = (@('Completed', 'Blocked', 'EvidenceUnavailable', 'Deferred') | ForEach-Object {
+        $chips = (@('Completed', 'Partial', 'Blocked', 'EvidenceUnavailable', 'Deferred') | ForEach-Object {
                 $st = $_; $g = $groups | Where-Object Name -eq $st
                 if ($g) { Get-StatusChip -Status $st -Count $g.Count }
             }) -join ''

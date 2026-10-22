@@ -64,7 +64,7 @@
     What can run on this machine right now?
 
 .NOTES
-    Version: 1.0.0
+    Version: 1.0.1
 #>
 [CmdletBinding()]
 param(
@@ -79,7 +79,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$LauncherVersion = '1.0.0'
+$LauncherVersion = '1.0.1'
 $repoRoot   = Split-Path $PSScriptRoot -Parent
 $scriptsDir = Join-Path $repoRoot 'scripts'
 $catalog    = (Import-PowerShellDataFile -Path (Join-Path $PSScriptRoot 'discovery-catalog.psd1')).Scripts
@@ -130,7 +130,7 @@ function ConvertFrom-RunFolderName {
 
 function Get-DatasetCount {
     param([string]$RunFolder)
-    $c = [ordered]@{ Completed = 0; Blocked = 0; EvidenceUnavailable = 0; Deferred = 0 }
+    $c = [ordered]@{ Completed = 0; Partial = 0; Blocked = 0; EvidenceUnavailable = 0; Deferred = 0 }
     $f = Join-Path $RunFolder 'dataset-status.csv'
     if (Test-Path -LiteralPath $f) {
         foreach ($r in (Import-Csv -LiteralPath $f)) {
@@ -329,13 +329,14 @@ foreach ($row in $picked) {
     if ($run) {
         $counts = Get-DatasetCount -RunFolder $run.FullName
         $datasets = ('{0} completed' -f $counts.Completed)
+        if ($counts.Partial) { $datasets += ", $($counts.Partial) partial" }
         if ($counts.Blocked) { $datasets += ", $($counts.Blocked) blocked" }
         if ($counts.EvidenceUnavailable) { $datasets += ", $($counts.EvidenceUnavailable) unavailable" }
         if ($counts.Deferred) { $datasets += ", $($counts.Deferred) deferred" }
     }
     $outcome = if (-not $run) { 'Failed' }
                elseif ($runError) { 'Failed (partial output)' }
-               elseif ($counts.Blocked -or $counts.EvidenceUnavailable) { 'Partial' }
+               elseif ($counts.Partial -or $counts.Blocked -or $counts.EvidenceUnavailable) { 'Partial' }
                else { 'Completed' }
     $results.Add([pscustomobject]@{
         Number    = $row.Number
@@ -359,7 +360,7 @@ if ($withFolder) {
 }
 if (@($results | Where-Object Outcome -eq 'Partial')) {
     Write-Host ''
-    Write-Host 'Partial = some datasets Blocked or EvidenceUnavailable; the reason is in that run''s dataset-status.csv.' -ForegroundColor Yellow
+    Write-Host 'Partial = some datasets Partial, Blocked or EvidenceUnavailable; the reason is in that run''s dataset-status.csv.' -ForegroundColor Yellow
 }
 
 if ($Report) {

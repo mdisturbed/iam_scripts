@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Read-only inventory of every attribute the AD schema allows on users, groups and computers, with
-    how many objects actually have a value in each.
+    Read-only inventory of every attribute the AD schema allows on users, groups, computers, contacts
+    and group managed service accounts, with how many objects actually have a value in each.
 
 .DESCRIPTION
     Answers "what is really populated in this directory, and what isn't" before attributes are
@@ -15,6 +15,16 @@
        objects with a value, total values (multi-valued), distinct values and the longest value.
     3. Large binary attributes (photos, certificates, other octet strings) are counted with a
        presence-only query, so their content is never downloaded.
+    4. Values that must be unique (-UniqueAttributes: employeeID, mail, userPrincipalName,
+       proxyAddresses, sAMAccountName, employeeNumber by default) are checked for duplicates within
+       each class, case-insensitively; proxyAddresses are compared address by address.
+    5. Population is broken down by enabled / disabled for users and computers, and optionally by an
+       attribute value or by parent OU (-BreakdownAttribute).
+
+    Classes: user = person accounts (objectCategory person); computer = machine accounts
+    (objectCategory computer). Group managed service accounts are a subclass of computer but have
+    their own objectCategory, so they are counted only under msDS-GroupManagedServiceAccount, not
+    under user or computer.
 
     Per attribute it also reports: data type, single- or multi-valued, mandatory, the class that
     brings it in, global catalog (partial attribute set), linked (forward / back link), system-only,
@@ -27,21 +37,22 @@
 
     Confidential attributes (MS-ADTS 2.2.9 fCONFIDENTIAL) are only returned to accounts with the
     extended read right, so a count of 0 there means "empty or not readable by the run account" and
-    is marked that way. Not-replicated attributes (lastLogon, badPwdCount, logonCount ...) hold a
-    per-DC value: the count reflects the DC queried.
+    is marked that way (ReadableByRunAccount = Unverified). Not-replicated attributes (lastLogon,
+    badPwdCount, logonCount ...) hold a per-DC value: the count reflects the DC queried.
 
-    No values are written unless -SampleValueCount is set: directory-wide values are personal data.
+    No values are written unless -SampleValueCount is set, except in attribute-duplicates, which
+    lists only the duplicated values and up to five objects holding each.
 
     READ-ONLY. Uses only Get-AD* cmdlets.
 
     Output: <OutputRoot>\23-ADAttributePopulation\<yyyyMMdd-HHmmssZ>\*.csv + run-manifest.json + run.log
 
 .PARAMETER ObjectClass
-    Which classes to inventory: user, group, computer (default: all three). -ObjectClass user alone
-    is lighter.
+    Which classes to inventory: user, group, computer, contact, msDS-GroupManagedServiceAccount
+    (default: all five). -ObjectClass user alone is lighter.
 
 .PARAMETER EnabledOnly
-    Users and computers: only enabled accounts.
+    Users, computers and gMSAs: only enabled accounts.
 
 .PARAMETER SampleValueCount
     Most common values to show per attribute (0 = none, the default). Only for attributes you know
@@ -49,6 +60,7 @@
 
 .PARAMETER DistinctValueCap
     Stop counting distinct values for an attribute above this many (reported as "<cap>+"). Bounds memory.
+    Not applied to -UniqueAttributes, which are counted in full.
 
 .PARAMETER BatchSize
     Attributes requested per pass over the objects. Smaller = more passes but lighter requests.
@@ -56,19 +68,30 @@
 .PARAMETER SkipPresenceQueries
     Don't run the presence-only queries for binary attributes (faster; those show as Not counted).
 
+.PARAMETER UniqueAttributes
+    Attributes checked for duplicate values within each class. @() turns the duplicate check off.
+
+.PARAMETER BreakdownAttribute
+    'none' (default), 'OU' (parent OU of each object) or an attribute name (for example
+    employeeType): population is also broken down by its value. Enabled / disabled is always
+    broken down for users and computers.
+
 .EXAMPLE
     .\23-Get-ADAttributePopulation.ps1 -Server DC1.contoso.local
 .EXAMPLE
     .\23-Get-ADAttributePopulation.ps1 -Server DC1.contoso.local -ObjectClass user -EnabledOnly
 .EXAMPLE
-    .\23-Get-ADAttributePopulation.ps1 -SearchBase 'OU=People,DC=contoso,DC=local'
+    .\23-Get-ADAttributePopulation.ps1 -SearchBase 'OU=People,DC=contoso,DC=local' -BreakdownAttribute employeeType
+.EXAMPLE
+    .\23-Get-ADAttributePopulation.ps1 -ObjectClass user -BreakdownAttribute OU -UniqueAttributes employeeID, mail
 
 .NOTES
-    Version : 1.1.0
+    Version : 1.2.0
     Requires: PowerShell 5.1 or 7.x, RSAT ActiveDirectory module, read access to the domain and schema
               (any authenticated user by default).
-    Load    : reads every attribute of every object of each class (one pass per batch). Run off-peak
-              in large domains; -SearchBase or -ObjectClass user keeps it lighter.
+    Load    : reads every attribute of every object of each class (one pass per batch), plus one light
+              pass per class for the breakdown keys. Run off-peak in large domains; -SearchBase or
+              -ObjectClass user keeps it lighter.
     Sources : searchFlags and systemFlags bits from [MS-ADTS] 2.2.9 and 2.2.10; attribute syntaxes from
               the Active Directory syntax table (attributeSyntax 2.5.5.x).
 #>
@@ -78,8 +101,8 @@ param(
     [string]$OutputRoot = '',
     [string]$Server = '',                                   # e.g. 'dc01.contoso.local'
     [string]$SearchBase = '',                               # blank = whole domain
-    [ValidateSet('user', 'group', 'computer')]
-    [string[]]$ObjectClass = @('user', 'group', 'computer'),
+    [ValidateSet('user', 'group', 'computer', 'contact', 'msDS-GroupManagedServiceAccount')]
+    [string[]]$ObjectClass = @('user', 'group', 'computer', 'contact', 'msDS-GroupManagedServiceAccount'),
     [switch]$EnabledOnly,
     [ValidateRange(0, 20)]
     [int]$SampleValueCount = 0,
@@ -87,13 +110,15 @@ param(
     [int]$DistinctValueCap = 1000,
     [ValidateRange(10, 500)]
     [int]$BatchSize = 100,
-    [switch]$SkipPresenceQueries
+    [switch]$SkipPresenceQueries,
+    [string[]]$UniqueAttributes = @('employeeID', 'mail', 'userPrincipalName', 'proxyAddresses', 'sAMAccountName', 'employeeNumber'),
+    [string]$BreakdownAttribute = 'none'                     # 'none', 'OU' or an attribute name such as 'employeeType'
     # -------------------------------------------------------------------------
 )
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '23-ADAttributePopulation'
-$ScriptVersion = '1.1.0'
+$ScriptVersion = '1.2.0'
 
 #region ---- Common helpers (identical in every AD script; self-contained by design) ----
 if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot 'output' }
@@ -163,6 +188,7 @@ $script:AdParams = @{}
 if ($Server) { $script:AdParams['Server'] = $Server }
 #endregion
 
+
 # ---- Script-specific constants ([MS-ADTS] 2.2.9 / 2.2.10; attribute syntax table) ----
 $FLAG_ATTR_NOT_REPLICATED = 0x1
 $FLAG_ATTR_IS_CONSTRUCTED = 0x4
@@ -181,8 +207,12 @@ function Get-SyntaxNumber { param([string]$Syntax) if ($Syntax.StartsWith($Synta
 $ClassFilters = @{
     user     = '(&(objectCategory=person)(objectClass=user))'
     group    = '(objectClass=group)'
-    computer = '(objectClass=computer)'
+    computer = '(&(objectCategory=computer)(objectClass=computer))'       # machine accounts; gMSAs have their own objectCategory
+    contact  = '(objectClass=contact)'
+    'msDS-GroupManagedServiceAccount' = '(objectClass=msDS-GroupManagedServiceAccount)'
 }
+$AccountClasses = @('user', 'computer', 'msDS-GroupManagedServiceAccount')   # classes with userAccountControl (enabled / disabled)
+$EnabledBreakdownClasses = @('user', 'computer')
 $DisabledClause = '(!(userAccountControl:1.2.840.113556.1.4.803:=2))'
 
 function ConvertTo-ValueText {
@@ -194,6 +224,10 @@ function ConvertTo-ValueText {
 }
 
 function Get-FlagValue { param($Value) if ($null -eq $Value -or "$Value" -eq '') { return 0 } return [int64]"$Value" }
+function Get-ParentDN { param([string]$DN) if ($DN -match '^(?:[^,\\]|\\.)+,(.+)$') { return $Matches[1] } return '' }
+$UniqueSet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($u in @($UniqueAttributes | Where-Object { $_ })) { [void]$UniqueSet.Add($u) }
+$BreakdownBy = $(if ($BreakdownAttribute -and $BreakdownAttribute -ne 'none') { $BreakdownAttribute } else { '' })
 
 $domainName = ''
 try {
@@ -229,6 +263,10 @@ try {
 
     $populationRows = [System.Collections.Generic.List[object]]::new()
     $closureRows    = [System.Collections.Generic.List[object]]::new()
+    $dupRows        = [System.Collections.Generic.List[object]]::new()
+    $dupFailed      = [System.Collections.Generic.List[string]]::new()
+    $bdRows         = [System.Collections.Generic.List[object]]::new()
+    $bdFailed       = [System.Collections.Generic.List[string]]::new()
     $summary        = [System.Collections.Generic.List[object]]::new()
     function Add-Metric { param($Metric, $Value, $Note = '') $summary.Add([pscustomobject][ordered]@{ Metric = $Metric; Value = $Value; Note = $Note }) }
 
@@ -291,13 +329,53 @@ try {
                 SystemOnly   = $(if ($a) { "$($a.systemOnly)" -eq 'True' } else { $null })
                 Populated = 0; TotalValues = 0; MaxLength = 0; Overflow = $false; ReadError = ''
                 Values = [System.Collections.Generic.Dictionary[string, int]]::new([StringComparer]::Ordinal)
+                Unique = ($UniqueSet.Contains($n) -and $method -eq 'Bulk')
+                DupFirst = $null; DupMulti = $null
+            }
+            if ($plan[$n].Unique) {
+                # value (case-insensitive) -> first DN; values seen on 2+ objects -> count and up to 5 DNs
+                $plan[$n].DupFirst = [System.Collections.Generic.Dictionary[string, string]]::new([StringComparer]::OrdinalIgnoreCase)
+                $plan[$n].DupMulti = [System.Collections.Generic.Dictionary[string, object]]::new([StringComparer]::OrdinalIgnoreCase)
             }
         }
 
         $filter = $ClassFilters[$cls]
-        if ($EnabledOnly -and $cls -in 'user', 'computer') { $filter = "(&$filter$DisabledClause)" }
+        if ($EnabledOnly -and $cls -in $AccountClasses) { $filter = "(&$filter$DisabledClause)" }
         $p = @{} + $script:AdParams
         if ($SearchBase) { $p['SearchBase'] = $SearchBase }
+
+        # ---- 3b. Breakdown index: one light pass for the group keys of every object ----
+        $bdEnabled = ($cls -in $EnabledBreakdownClasses)
+        $groupOf = $null; $bdObjects = @{}; $bdPop = @{}
+        if ($bdEnabled -or $BreakdownBy) {
+            $keyProps = @()
+            if ($bdEnabled) { $keyProps += 'userAccountControl' }
+            if ($BreakdownBy -and $BreakdownBy -ne 'OU') { $keyProps += $BreakdownBy }
+            $index = [System.Collections.Generic.Dictionary[string, string[]]]::new([StringComparer]::OrdinalIgnoreCase)
+            try {
+                $getArgs = @{ LDAPFilter = $filter; ResultPageSize = 500 }
+                if ($keyProps.Count) { $getArgs['Properties'] = $keyProps }
+                Get-ADObject @getArgs @p | ForEach-Object {
+                    $keys = @()
+                    if ($bdEnabled) { $keys += $(if ((Get-FlagValue $_.userAccountControl) -band 2) { "EnabledState`tDisabled" } else { "EnabledState`tEnabled" }) }
+                    if ($BreakdownBy -eq 'OU') { $keys += ("OU`t{0}" -f (Get-ParentDN ([string]$_.DistinguishedName))) }
+                    elseif ($BreakdownBy) {
+                        $bv = @($_.$BreakdownBy | Where-Object { $null -ne $_ -and "$_" -ne '' })
+                        $keys += ("{0}`t{1}" -f $BreakdownBy, $(if ($bv.Count) { ConvertTo-ValueText $bv[0] } else { '(empty)' }))
+                    }
+                    $index[[string]$_.DistinguishedName] = $keys
+                    foreach ($k in $keys) { if ($bdObjects.ContainsKey($k)) { $bdObjects[$k]++ } else { $bdObjects[$k] = 1 } }
+                }
+                $groupOf = $index
+            }
+            catch { $bdFailed.Add($cls); Write-RunLog ("{0}: breakdown index pass failed, no breakdown for this class: {1}" -f $cls, $_.Exception.Message) 'WARN' }
+        }
+        function Add-BreakdownHit {
+            param([string]$Attr, [string]$DN)
+            if ($null -eq $groupOf -or -not $groupOf.ContainsKey($DN)) { return }
+            if (-not $bdPop.ContainsKey($Attr)) { $bdPop[$Attr] = @{} }
+            foreach ($k in $groupOf[$DN]) { if ($bdPop[$Attr].ContainsKey($k)) { $bdPop[$Attr][$k]++ } else { $bdPop[$Attr][$k] = 1 } }
+        }
 
         # ---- 4. Bulk passes ----
         $bulk = @($plan.Values | Where-Object Method -eq 'Bulk' | ForEach-Object { $_.Name } | Sort-Object)
@@ -313,6 +391,7 @@ try {
                 Get-ADObject -LDAPFilter $filter -Properties $chunk -ResultPageSize 500 @p | ForEach-Object {
                     $seenThisPass++
                     $obj = $_
+                    $objDn = [string]$obj.DistinguishedName
                     $names = if ($null -ne $obj.PropertyNames) { $obj.PropertyNames } else { $obj.PSObject.Properties.Name }
                     foreach ($pn in $names) {
                         if (-not $want.ContainsKey($pn)) { continue }
@@ -321,12 +400,24 @@ try {
                         if (-not $vals.Count) { continue }
                         $entry.Populated++
                         $entry.TotalValues += $vals.Count
+                        if ($null -ne $groupOf) { Add-BreakdownHit -Attr $entry.Name -DN $objDn }
+                        $objValues = $null
+                        if ($entry.Unique) { $objValues = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase) }
                         foreach ($v in $vals) {
                             $t = ConvertTo-ValueText $v
                             if ($t.Length -gt $entry.MaxLength) { $entry.MaxLength = $t.Length }
                             if ($entry.Values.ContainsKey($t)) { $entry.Values[$t]++ }
-                            elseif ($entry.Values.Count -lt $DistinctValueCap) { $entry.Values[$t] = 1 }
+                            elseif ($entry.Unique -or $entry.Values.Count -lt $DistinctValueCap) { $entry.Values[$t] = 1 }
                             else { $entry.Overflow = $true }
+                            if ($entry.Unique -and $objValues.Add($t)) {
+                                # each value counted once per object; compared case-insensitively
+                                if ($entry.DupMulti.ContainsKey($t)) { $dm = $entry.DupMulti[$t]; $dm.Count++; if ($dm.DNs.Count -lt 5) { $dm.DNs.Add($objDn) } }
+                                elseif ($entry.DupFirst.ContainsKey($t)) {
+                                    $dns = [System.Collections.Generic.List[string]]::new(); $dns.Add($entry.DupFirst[$t]); $dns.Add($objDn)
+                                    $entry.DupMulti[$t] = [pscustomobject]@{ Value = $t; Count = 2; DNs = $dns }
+                                }
+                                else { $entry.DupFirst[$t] = $objDn }
+                            }
                         }
                     }
                 }
@@ -338,7 +429,7 @@ try {
                 foreach ($n in $chunk) {
                     try {
                         $c = 0
-                        Get-ADObject -LDAPFilter "(&$filter($n=*))" -ResultPageSize 500 @p | ForEach-Object { $c++ }
+                        Get-ADObject -LDAPFilter "(&$filter($n=*))" -ResultPageSize 500 @p | ForEach-Object { $c++; if ($null -ne $groupOf) { Add-BreakdownHit -Attr $plan[$n].Name -DN ([string]$_.DistinguishedName) } }
                         $plan[$n].Populated = $c
                         $plan[$n].ReadError = 'Counted by presence query (bulk read failed): no value statistics'
                     }
@@ -360,7 +451,7 @@ try {
             foreach ($e in $presence) {
                 try {
                     $c = 0
-                    Get-ADObject -LDAPFilter "(&$filter($($e.Name)=*))" -ResultPageSize 500 @p | ForEach-Object { $c++ }
+                    Get-ADObject -LDAPFilter "(&$filter($($e.Name)=*))" -ResultPageSize 500 @p | ForEach-Object { $c++; if ($null -ne $groupOf) { Add-BreakdownHit -Attr $e.Name -DN ([string]$_.DistinguishedName) } }
                     $e.Populated = $c
                 }
                 catch { $e.ReadError = "Read failed: $($_.Exception.Message)" }
@@ -413,22 +504,61 @@ try {
                             Select-Object -First $SampleValueCount | ForEach-Object { '{0} ({1})' -f $_.Key, $_.Value }) -join ' | ')
                     } else { '' })
             }
+            $row['ReadableByRunAccount'] = $(if (-not $counted) { '' } elseif ($e.Populated -gt 0) { 'Yes' } elseif ($e.Confidential) { 'Unverified' } else { '' })
             $populationRows.Add([pscustomobject]$row)
+
+            # Duplicates of values that must be unique
+            if ($e.Unique) {
+                if ($e.ReadError) { $dupFailed.Add("$cls/$($e.Name)") }
+                else {
+                    foreach ($dm in ($e.DupMulti.Values | Sort-Object -Property @{ Expression = 'Count'; Descending = $true }, @{ Expression = 'Value'; Descending = $false })) {
+                        $dupRows.Add([pscustomobject][ordered]@{ ObjectClass = $cls; Attribute = $e.Name; Value = $dm.Value; Count = $dm.Count; SampleDNs = ($dm.DNs -join ' | ') })
+                    }
+                }
+            }
+            # Breakdown by enabled state / OU / attribute value (attributes empty across the class are left out)
+            if ($null -ne $groupOf -and $counted -and $e.Populated -gt 0 -and -not ($e.ReadError -like 'Read failed*')) {
+                foreach ($k in ($bdObjects.Keys | Sort-Object)) {
+                    $parts = $k -split "`t", 2
+                    $pop = 0
+                    if ($bdPop.ContainsKey($e.Name) -and $bdPop[$e.Name].ContainsKey($k)) { $pop = $bdPop[$e.Name][$k] }
+                    $bdRows.Add([pscustomobject][ordered]@{
+                            ObjectClass      = $cls
+                            Attribute        = $e.Name
+                            Group            = $parts[1]
+                            Objects          = $bdObjects[$k]
+                            Populated        = $pop
+                            PercentPopulated = $(if ($bdObjects[$k]) { [math]::Round(100.0 * $pop / $bdObjects[$k], 1) } else { '' })
+                            BreakdownBy      = $parts[0]
+                        })
+                }
+            }
         }
+        foreach ($e in @($plan.Values | Where-Object { $UniqueSet.Contains($_.Name) -and $_.Method -ne 'Bulk' })) { $dupFailed.Add("$cls/$($e.Name) (not readable in bulk: $($e.Method))") }
 
         $mine = @($populationRows | Where-Object ObjectClass -eq $cls)
         $countedRows = @($mine | Where-Object { $_.Populated -isnot [string] })   # '' = not counted; never compare with -ne '' (0 -ne '' is False)
-        Add-Metric "$cls objects scanned" $objectCount $(if ($EnabledOnly -and $cls -in 'user', 'computer') { 'Enabled only' } else { '' })
-        Add-Metric "$cls attributes allowed by schema" $mine.Count ("{0} classes in closure" -f $seen.Count)
+        Add-Metric -Metric "$cls objects scanned" -Value $objectCount -Note $(if ($EnabledOnly -and $cls -in $AccountClasses) { 'Enabled only' } else { '' })
+        Add-Metric -Metric "$cls attributes allowed by schema" -Value $mine.Count -Note ("{0} classes in closure" -f $seen.Count)
         Add-Metric "$cls attributes populated on at least one object" @($countedRows | Where-Object { $_.Populated -gt 0 }).Count
         Add-Metric "$cls attributes populated on every object" @($countedRows | Where-Object { $objectCount -gt 0 -and $_.Populated -eq $objectCount }).Count
-        Add-Metric "$cls attributes never populated" @($countedRows | Where-Object { $_.Populated -eq 0 }).Count 'Includes confidential attributes that may only be unreadable'
+        Add-Metric -Metric "$cls attributes never populated" -Value @($countedRows | Where-Object { $_.Populated -eq 0 }).Count -Note 'Includes confidential attributes that may only be unreadable'
         Add-Metric "$cls confidential attributes" @($mine | Where-Object Confidential).Count
-        Add-Metric "$cls attributes not counted" @($mine | Where-Object { $_.Populated -is [string] }).Count 'Constructed, base-only, security descriptor, skipped or read failed'
+        Add-Metric -Metric "$cls attributes not counted" -Value @($mine | Where-Object { $_.Populated -is [string] }).Count -Note 'Constructed, base-only, security descriptor, skipped or read failed'
+        foreach ($ua in @($plan.Values | Where-Object { $_.Unique } | Sort-Object Name)) {
+            if ($ua.ReadError) { Add-Metric "$cls duplicate values: $($ua.Name)" 'Read failed' -Note 'Bulk read failed: duplicates not checked'; continue }
+            $dupValues = @($ua.DupMulti.Values)
+            Add-Metric "$cls duplicate values: $($ua.Name)" $dupValues.Count -Note ("{0} objects share a duplicated value" -f (($dupValues | Measure-Object Count -Sum).Sum + 0))
+        }
     }
 
     Export-Dataset -Name 'attribute-population' -Rows $populationRows -Note 'One row per class and attribute; Populated = objects with at least one value'
     Export-Dataset -Name 'schema-class-closure' -Rows $closureRows -Note 'Classes whose attributes apply: the class, its superclasses and auxiliary classes'
+    if ($UniqueSet.Count) {
+        Export-Dataset -Name 'attribute-duplicates' -Rows $dupRows -Status $(if ($dupFailed.Count) { 'Partial' } else { 'Completed' }) -Note ("Values held by more than one object of the same class (case-insensitive; proxyAddresses per address). Holds directory values: handle as personal data. Checked: {0}{1}" -f (@($UniqueSet) -join ', '), $(if ($dupFailed.Count) { '. PARTIAL: not checked: ' + ($dupFailed -join ', ') } else { '' }))
+    }
+    else { Set-DatasetStatus -Name 'attribute-duplicates' -Status 'Deferred' -Note 'Duplicate check off (-UniqueAttributes empty)' }
+    Export-Dataset -Name 'attribute-population-breakdown' -Rows $bdRows -Status $(if ($bdFailed.Count) { 'Partial' } else { 'Completed' }) -Note ("Population per group: EnabledState (users, computers){0}; attributes empty across the class are left out{1}" -f $(if ($BreakdownBy) { ", $BreakdownBy" } else { '' }), $(if ($bdFailed.Count) { '. PARTIAL: index pass failed for: ' + ($bdFailed -join ', ') } else { '' }))
     Export-Dataset -Name 'summary' -Rows $summary
 }
 catch {
@@ -436,6 +566,6 @@ catch {
     throw
 }
 finally {
-    Write-RunManifest -DomainName $domainName -Parameters @{ SearchBase = $SearchBase; ObjectClass = $ObjectClass; EnabledOnly = [bool]$EnabledOnly; SampleValueCount = $SampleValueCount; DistinctValueCap = $DistinctValueCap; BatchSize = $BatchSize; SkipPresenceQueries = [bool]$SkipPresenceQueries }
+    Write-RunManifest -DomainName $domainName -Parameters @{ SearchBase = $SearchBase; ObjectClass = $ObjectClass; EnabledOnly = [bool]$EnabledOnly; SampleValueCount = $SampleValueCount; DistinctValueCap = $DistinctValueCap; BatchSize = $BatchSize; SkipPresenceQueries = [bool]$SkipPresenceQueries; UniqueAttributes = $UniqueAttributes; BreakdownAttribute = $BreakdownAttribute }
     Write-RunLog ("Finished. Evidence folder: {0}" -f $script:RunFolder)
 }

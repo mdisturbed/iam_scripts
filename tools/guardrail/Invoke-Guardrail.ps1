@@ -100,7 +100,7 @@ try {
                     $items.Add([pscustomobject]@{ Name = $n; Text = [IO.File]::ReadAllText((Join-Path $repoRoot $n)); Bytes = ([IO.FileInfo](Join-Path $repoRoot $n)).Length })
                 }
             }
-            $hasCommits = (& git rev-parse --verify --quiet HEAD) -ne $null
+            $hasCommits = $null -ne (& git rev-parse --verify --quiet HEAD)
             if ($hasCommits) {
                 $log = & git log --format='%H%n%an <%ae>%n%B%n----END----'
                 $chunk = @(); $sha = $null

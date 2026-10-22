@@ -26,32 +26,32 @@ Each links to its page: what it collects, parameters, output files, permissions,
 
 | # | Script | Question it answers | Source |
 |---|--------|--------------------|--------|
-| 01 | [MFA coverage](docs/scripts/01-mfa-coverage.md) | Is MFA actually enforced everywhere, or only registered? | Entra |
-| 02 | [Entra privileged access](docs/scripts/02-entra-privileged-access.md) | Who holds Entra admin roles, how, and are those accounts well managed? | Entra |
-| 03 | [Apps and consents](docs/scripts/03-apps-and-consents.md) | Which apps can reach our data, and are they governed? | Entra |
-| 04 | [AD privileged and service accounts](docs/scripts/04-ad-privileged-and-service-accounts.md) | Who has admin rights on-prem (including via nesting), and where are the service accounts? | AD |
-| 05 | [AD group nesting](docs/scripts/05-ad-group-nesting.md) | How deep and messy is group nesting, and how healthy are groups? | AD |
-| 06 | [JML timing](docs/scripts/06-jml-timing.md) | How quickly are joiners provisioned and leavers disabled, compared with HR? | AD + HR file (+ Entra) |
-| 07 | [Role mining](docs/scripts/07-role-mining.md) | Which groups do people in the same department or job code share, and is the HR data clean enough to drive roles? | AD |
-| 08 | [Extension attribute inventory](docs/scripts/08-extension-attribute-inventory.md) | Which custom / extension attributes are free to carry new data? | AD (+ Entra) |
-| 09 | [Mail forwarding and external sharing](docs/scripts/09-mail-forwarding-and-external-sharing.md) | Is mail being forwarded out, and how open is SharePoint / OneDrive sharing? | Exchange Online + SharePoint |
-| 10 | [Guest access](docs/scripts/10-guest-access.md) | How many guests are there, are they used, and what can they reach? | Entra |
-| 11 | [Azure RBAC](docs/scripts/11-azure-rbac.md) | Who has access to Azure resources, at what scope, and to deleted principals? | Azure + Entra |
-| 12 | [Stale accounts](docs/scripts/12-stale-accounts.md) | Which identities are really unused once AD and Entra activity are combined? | AD + Entra |
-| 13 | [Hybrid sync scope](docs/scripts/13-hybrid-sync-scope.md) | What actually syncs from AD to Entra, and where do they disagree? | AD + Entra |
-| 14 | [IGA reconciliation](docs/scripts/14-iga-reconciliation.md) | Where does the IGA platform's view of accounts and group access differ from AD? | AD + IGA export |
-| 15 | [Rule-managed access](docs/scripts/15-rule-managed-access.md) | Are applied roles, HR-expected roles and actual group membership in step? | AD + role files |
-| 16 | [Device posture](docs/scripts/16-device-posture.md) | Are devices joined, managed and compliant, and does Conditional Access rely on it? | Entra + Intune |
-| 17 | [AWS IAM posture](docs/scripts/17-aws-iam-posture.md) | Which AWS users, keys, roles, trusts and permission sets exist, and which are risky? | AWS |
+| 01 | [MFA coverage](docs/scripts/01-mfa-coverage.md) | Is MFA actually enforced everywhere, how strong is it, and who is left out? | Entra |
+| 02 | [Entra privileged access](docs/scripts/02-entra-privileged-access.md) | Who really holds Entra admin roles, down to the account, and are those accounts well managed? | Entra |
+| 03 | [Apps and consents](docs/scripts/03-apps-and-consents.md) | Which apps can reach our data, who owns and can use them, and are they governed? | Entra |
+| 04 | [AD privileged and service accounts](docs/scripts/04-ad-privileged-and-service-accounts.md) | Who has admin rights on-prem (including via nesting and primary group), which accounts carry risky settings, and where are the service accounts? | AD |
+| 05 | [AD group nesting](docs/scripts/05-ad-group-nesting.md) | How deep and messy is group nesting, which accounts does each group really reach, and how healthy are groups and their owners? | AD |
+| 06 | [JML timing](docs/scripts/06-jml-timing.md) | How quickly are joiners provisioned and leavers disabled, and which leavers and their admin accounts still hold access? | AD + HR file (+ Entra) |
+| 07 | [Role mining](docs/scripts/07-role-mining.md) | Which groups do people in the same department or job code share, who has far more access than their peers, and is the HR data clean enough to drive roles? | AD |
+| 08 | [Extension attribute inventory](docs/scripts/08-extension-attribute-inventory.md) | Which custom / extension attributes are free to carry new data, and does anything already read them? | AD (+ Entra) |
+| 09 | [Mail forwarding and external sharing](docs/scripts/09-mail-forwarding-and-external-sharing.md) | Is mail being forwarded out, who can read or send as other mailboxes, and how open is SharePoint / OneDrive sharing? | Exchange Online + SharePoint |
+| 10 | [Guest access](docs/scripts/10-guest-access.md) | How many guests and external accounts are there, are they used, what can they reach, and which partner tenants do we trust? | Entra |
+| 11 | [Azure RBAC](docs/scripts/11-azure-rbac.md) | Who actually holds access to Azure resources (groups expanded), at what scope, permanently or just-in-time, and through which other paths? | Azure + Entra |
+| 12 | [Stale accounts](docs/scripts/12-stale-accounts.md) | Which identities are really unused once AD and Entra activity are combined, and what do the stale ones still hold? | AD + Entra |
+| 13 | [Hybrid sync scope](docs/scripts/13-hybrid-sync-scope.md) | What actually syncs from AD to Entra, where do they disagree, and which on-prem admins reach the cloud? | AD + Entra |
+| 14 | [IGA reconciliation](docs/scripts/14-iga-reconciliation.md) | Where does the IGA platform's view of accounts and group access differ from AD, including access through nested groups and leavers who still hold groups? | AD + IGA export |
+| 15 | [Rule-managed access](docs/scripts/15-rule-managed-access.md) | Are applied roles, HR-expected roles and actual group membership in step, and who is in a rule-managed group who shouldn't be? | AD + role files |
+| 16 | [Device posture](docs/scripts/16-device-posture.md) | Are devices joined, managed, compliant and backed up, who can join them, and which accounts does device-based CA exempt? | Entra + Intune |
+| 17 | [AWS IAM posture](docs/scripts/17-aws-iam-posture.md) | Which AWS identities exist, who is admin-equivalent and through which policy, and which people sit behind each Identity Center assignment? | AWS |
 | 18 | [AD delegation](docs/scripts/18-ad-delegation.md) | Who has dangerous rights through AD permissions, and which real accounts end up holding them? | AD |
-| 19 | [DC authentication protocols](docs/scripts/19-dc-authentication-protocols.md) | Who still uses NTLM (v1 especially) or RC4/DES Kerberos? | DC event logs |
-| 20 | [Governance coverage](docs/scripts/20-governance-coverage.md) | What share of apps, groups and roles is actually covered by access reviews? | Entra ID Governance |
-| 21 | [Identity risk](docs/scripts/21-identity-risk.md) | Who is at risk right now, and does Conditional Access act on risk? | Entra ID Protection |
-| 22 | [PIM role settings](docs/scripts/22-pim-role-settings.md) | What does it actually take to activate each admin role? | Entra PIM |
-| 23 | [AD attribute population](docs/scripts/23-ad-attribute-population.md) | Which attributes does the schema allow, and how many objects actually have a value in each? | AD |
-| 24 | [CA report-only impact](docs/scripts/24-ca-reportonly-impact.md) | Who would a report-only Conditional Access policy block or challenge if it were switched on? | Entra sign-in logs |
-| 25 | [Purview classification and DLP](docs/scripts/25-purview-classification.md) | What can classify regulated data, what is switched on, and how much tagged content exists where? | Microsoft Purview |
-| 26 | [PAM vault coverage](docs/scripts/26-pam-vault-coverage.md) | Which privileged accounts are managed in the PAM vault, and which are not? | PAM export + 02/04/11/17 |
+| 19 | [DC authentication protocols](docs/scripts/19-dc-authentication-protocols.md) | Who still uses NTLM (v1 and LM especially) or RC4/DES Kerberos, against which servers, and which accounts can't do AES? | DC event logs + AD |
+| 20 | [Governance coverage](docs/scripts/20-governance-coverage.md) | What share of apps, groups and privileged roles is actually covered by access reviews, what do access packages grant, and are joiner / mover / leaver workflows in place? | Entra ID Governance |
+| 21 | [Identity risk](docs/scripts/21-identity-risk.md) | Who is at risk right now, and does Conditional Access act on risk for everyone? | Entra ID Protection |
+| 22 | [PIM role settings](docs/scripts/22-pim-role-settings.md) | What does it actually take to activate each admin role or privileged group, and who approves it? | Entra PIM |
+| 23 | [AD attribute population](docs/scripts/23-ad-attribute-population.md) | Which attributes does the schema allow, how many objects actually have a value in each, and where are values duplicated? | AD |
+| 24 | [CA report-only impact](docs/scripts/24-ca-reportonly-impact.md) | What does each Conditional Access policy do to real sign-ins, who would a report-only policy block or challenge, and which sign-ins does no enforced policy cover? | Entra sign-in logs |
+| 25 | [Purview classification and DLP](docs/scripts/25-purview-classification.md) | What can classify and protect regulated data, what is switched on, who is excluded, who can see or bypass it, and how much tagged content exists? | Microsoft Purview |
+| 26 | [PAM vault coverage](docs/scripts/26-pam-vault-coverage.md) | Which privileged, service and delegated accounts are managed in the PAM vault, which are not, and which vault entries are stale? | PAM export + 02/04/11/17/18 |
 
 The scripts gather facts. They do not score maturity or recommend fixes; that interpretation belongs in the analysis that uses the evidence.
 

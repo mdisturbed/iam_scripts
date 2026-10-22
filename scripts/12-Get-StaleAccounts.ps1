@@ -5,20 +5,33 @@
 .DESCRIPTION
     A user can look stale in AD (no domain logon) while signing in to Microsoft 365 every day, or
     the reverse. This script joins every AD user to its Entra counterpart and reports the newest
-    activity from either side:
+    activity from either side, together with what a stale account still holds:
 
       - One row per identity: Hybrid (synced), ADOnly or CloudOnly, enabled state on each side,
         AD last logon, Entra last interactive / non-interactive / successful sign-in, newest
-        activity overall, days since, activity bucket, and flags
-      - Optional: stale computer accounts in AD
+        activity overall, days since, activity bucket, category (Admin / Service / Sync / Guest /
+        User), group memberships, adminCount, SPN, manager, password age, Microsoft 365 licences,
+        Entra directory roles (active and eligible, including through role-assignable groups)
+        and session revocation time
+      - Synced Entra users with no AD match in this scope, and Entra users sharing one source anchor
+      - Stale computer accounts (on by default; -SkipComputers to leave out)
+      - Managed service accounts (gMSA / sMSA) with last logon and whether any principal may
+        retrieve the password
       - Summary by source and activity bucket (0-30, 31-90, 91-180, 181-365, 365+, never)
 
     Flags: NeverUsed, Stale (> StaleDays), EnabledMismatch (enabled on one side, disabled on the
     other), CreatedButNeverUsed (created more than NewAccountGraceDays ago, never used),
-    PasswordNeverExpires (AD), Guest.
+    PasswordNeverExpires (AD), Guest, StaleButPrivileged (adminCount or an Entra role),
+    StaleButLicensed, DisabledButLicensed, NeverLoggedOn (no AD logon, created more than StaleDays
+    ago), PasswordNeverExpiresOld, ServiceAccountNoOwner (SPN or service name, no manager / managedBy).
 
     Matching uses the Entra Connect source anchor: onPremisesImmutableId = base64(objectGUID) by
-    default, or base64(mS-DS-ConsistencyGuid) with -AnchorAttribute.
+    default, or base64(mS-DS-ConsistencyGuid) with -AnchorAttribute; an account with an empty
+    mS-DS-ConsistencyGuid falls back to objectGUID, as Entra Connect does.
+
+    -PreciseLastLogon reads the non-replicated lastLogon from every domain controller for the
+    stale candidates only and uses the newest value. It is off by default (one query per
+    candidate per DC).
 
     READ-ONLY. Uses only Get-AD* cmdlets and Graph GET requests.
 
@@ -27,17 +40,20 @@
 .EXAMPLE
     .\12-Get-StaleAccounts.ps1
 .EXAMPLE
-    .\12-Get-StaleAccounts.ps1 -StaleDays 60 -IncludeComputers -SearchBase 'OU=Corp,DC=contoso,DC=local'
+    .\12-Get-StaleAccounts.ps1 -StaleDays 60 -SkipComputers -SearchBase 'OU=Corp,DC=contoso,DC=local'
 .EXAMPLE
-    .\12-Get-StaleAccounts.ps1 -EnabledOnly -AnchorAttribute 'mS-DS-ConsistencyGuid'
+    .\12-Get-StaleAccounts.ps1 -EnabledOnly -AnchorAttribute 'mS-DS-ConsistencyGuid' -PreciseLastLogon
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.1.0
     Requires: PowerShell 5.1 or 7.x, RSAT ActiveDirectory module, Microsoft.Graph.Authentication
-    Scopes  : User.Read.All, AuditLog.Read.All (signInActivity needs Entra ID P1)
+    Scopes  : User.Read.All, AuditLog.Read.All (signInActivity needs Entra ID P1),
+              RoleManagement.Read.Directory, GroupMember.Read.All (Entra roles; not with -SkipEntraRoles;
+              eligible roles need Entra ID P2)
     Accuracy: AD lastLogonTimestamp replicates every 9-14 days, so AD dates can be up to ~14 days
-              behind. Entra non-interactive sign-ins include token refreshes by apps on the
-              user's behalf, so "recent" there does not always mean a person was present.
+              behind (use -PreciseLastLogon for the candidates). Entra non-interactive sign-ins
+              include token refreshes by apps on the user's behalf, so "recent" there does not
+              always mean a person was present.
 #>
 [CmdletBinding()]
 param(
@@ -49,8 +65,14 @@ param(
     [string]$AnchorAttribute = 'objectGUID',
     [int]$StaleDays = 90,
     [int]$NewAccountGraceDays = 30,
+    [int]$PasswordAgeDays = 365,                            # PasswordNeverExpiresOld threshold
     [switch]$EnabledOnly,
-    [switch]$IncludeComputers,
+    [switch]$SkipComputers,
+    [switch]$IncludeComputers,                              # accepted for compatibility; computers are included by default
+    [switch]$SkipEntraRoles,
+    [switch]$PreciseLastLogon,
+    [string[]]$AdminNamePatterns = @('adm*', '*adm', '*-adm*', '*_adm*', 'a-*', 'a_*', 'da-*', '*admin*'),
+    [string[]]$ServiceNamePatterns = @('svc*', '*-svc*', '*_svc*', 'sa-*', 'sa_*'),
 
     [ValidateSet('Delegated', 'AppCertificate')]
     [string]$AuthMode = 'Delegated',
@@ -62,8 +84,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '12-StaleAccounts'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.1.0'
 $RequiredScopes = @('User.Read.All', 'AuditLog.Read.All')
+if (-not $SkipEntraRoles) { $RequiredScopes += @('RoleManagement.Read.Directory', 'GroupMember.Read.All') }
 
 #region ---- Common helpers (identical in every hybrid AD + Graph script; self-contained by design) ----
 if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot 'output' }
@@ -240,7 +263,7 @@ if ($Server) { $script:AdParams['Server'] = $Server }
 
 function Get-Bucket {
     param($Days)
-    if ($null -eq $Days -or $Days -eq '') { return 'Never' }
+    if ($null -eq $Days -or "$Days" -eq '') { return 'Never' }
     if ($Days -le 30) { return '0-30' }
     if ($Days -le 90) { return '31-90' }
     if ($Days -le 180) { return '91-180' }
@@ -249,11 +272,88 @@ function Get-Bucket {
 }
 function Format-Utc { param($Date) if ($Date) { return $Date.ToString('yyyy-MM-ddTHH:mm:ssZ') } return '' }
 function ConvertTo-UtcDate { param($Value) if ($Value) { return ([datetime]$Value).ToUniversalTime() } return $null }
+function ConvertFrom-FileTime { param($Value) if ($null -eq $Value -or "$Value" -eq '') { return $null } $v = [int64]"$Value"; if ($v -le 0 -or $v -eq [int64]::MaxValue) { return $null } return [datetime]::FromFileTimeUtc($v) }
+function Test-NamePattern { param([string]$Name, [string[]]$Patterns) return [bool](@($Patterns | Where-Object { $Name -like $_ }).Count) }
+function Get-CnFromDn { param([string]$DN) if (-not $DN) { return '' } if ($DN -match '^CN=((?:\\,|[^,])+)') { return ($Matches[1] -replace '\\,', ',') } return $DN }
+function Get-AnchorKey {
+    # Entra Connect source anchor: mS-DS-ConsistencyGuid when chosen and set, otherwise objectGUID.
+    param($AdObject)
+    $bytes = $null
+    if ($AnchorAttribute -eq 'mS-DS-ConsistencyGuid' -and $AdObject.'mS-DS-ConsistencyGuid') { $bytes = [byte[]]$AdObject.'mS-DS-ConsistencyGuid' }
+    if (-not $bytes -and $AdObject.ObjectGUID) { $bytes = $AdObject.ObjectGUID.ToByteArray() }
+    if (-not $bytes) { return '' }
+    return [Convert]::ToBase64String($bytes)
+}
+
+function Get-EntraRoleHolders {
+    # Users holding an Entra directory role: active assignments + eligible (PIM) assignments,
+    # with group principals (role-assignable groups) expanded through transitiveMembers.
+    # Status: Completed / Partial / Blocked / EvidenceUnavailable.
+    param([hashtable]$UserIds)
+    $r = [pscustomobject]@{ Status = 'Completed'; Note = ''; ByUser = @{}; GroupsExpanded = 0 }
+    $notes = [System.Collections.Generic.List[string]]::new()
+    $names = @{}
+    try { foreach ($d in (Invoke-GraphGetAll -Uri 'https://graph.microsoft.com/v1.0/roleManagement/directory/roleDefinitions?$select=id,displayName' -Label 'roleDefinitions')) { $names[[string]$d.id] = $d.displayName } }
+    catch { $notes.Add("role names not readable ($($_.Exception.Message))") }
+    $assign = [System.Collections.Generic.List[object]]::new()
+    try {
+        foreach ($a in (Invoke-GraphGetAll -Uri 'https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments?$select=principalId,roleDefinitionId,directoryScopeId&$expand=principal($select=id,displayName)' -Label 'roleAssignments')) {
+            $assign.Add([pscustomobject]@{ Principal = [string]$a.principalId; Role = [string]$a.roleDefinitionId; Scope = [string]$a.directoryScopeId; State = 'Active'; PrincipalInfo = $a.principal })
+        }
+    }
+    catch {
+        $r.Status = Get-FailureStatus $_
+        $r.Note = "Active role assignments not readable: $($_.Exception.Message)"
+        Write-RunLog ("Entra roles: {0}" -f $r.Note) 'WARN'
+        return $r
+    }
+    try {
+        foreach ($a in (Invoke-GraphGetAll -Uri 'https://graph.microsoft.com/v1.0/roleManagement/directory/roleEligibilityScheduleInstances?$select=principalId,roleDefinitionId,directoryScopeId&$expand=principal($select=id,displayName)' -Label 'roleEligibilityScheduleInstances')) {
+            $assign.Add([pscustomobject]@{ Principal = [string]$a.principalId; Role = [string]$a.roleDefinitionId; Scope = [string]$a.directoryScopeId; State = 'Eligible'; PrincipalInfo = $a.principal })
+        }
+    }
+    catch { $r.Status = 'Partial'; $notes.Add("eligible assignments not readable, so eligible-only holders are missing ($($_.Exception.Message))") }
+    $groupCache = @{}
+    foreach ($a in $assign) {
+        $roleName = $(if ($names.ContainsKey($a.Role)) { $names[$a.Role] } else { $a.Role })
+        if ($a.Scope -and $a.Scope -ne '/') { $roleName += " [scope $($a.Scope)]" }
+        $holders = @(); $via = ''
+        $ptype = ''; $pname = $a.Principal
+        if ($a.PrincipalInfo) { $ptype = ("$($a.PrincipalInfo.'@odata.type')" -replace '#microsoft.graph.', ''); if ($a.PrincipalInfo.displayName) { $pname = $a.PrincipalInfo.displayName } }
+        if ($ptype -eq 'servicePrincipal') { continue }
+        if ($ptype -eq 'user' -or $UserIds.ContainsKey($a.Principal)) { $holders = @($a.Principal) }
+        else {
+            if (-not $groupCache.ContainsKey($a.Principal)) {
+                try {
+                    $m = Invoke-GraphGetAll -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/transitiveMembers/microsoft.graph.user?`$select=id,displayName" -f $a.Principal) -Label "role group $($a.Principal)"
+                    $groupCache[$a.Principal] = @($m | ForEach-Object { [string]$_.id })
+                    $r.GroupsExpanded++
+                }
+                catch {
+                    $msg = "$($_.Exception.Message) $($_.ErrorDetails.Message)"
+                    if ($msg -match '404|NotFound|Request_ResourceNotFound') { $groupCache[$a.Principal] = @() }   # not a group: service principal or unknown user scope
+                    else { $groupCache[$a.Principal] = @(); $r.Status = 'Partial'; $notes.Add("members of role principal $($a.Principal) not readable ($($_.Exception.Message))") }
+                }
+            }
+            $holders = $groupCache[$a.Principal]; $via = ", via group $pname"
+        }
+        foreach ($h in $holders) {
+            if (-not $r.ByUser.ContainsKey($h)) { $r.ByUser[$h] = [System.Collections.Generic.List[string]]::new() }
+            $label = '{0} ({1}{2})' -f $roleName, $a.State, $via
+            if (-not $r.ByUser[$h].Contains($label)) { $r.ByUser[$h].Add($label) }
+        }
+    }
+    $r.Note = ($notes -join '; ')
+    Write-RunLog ("Entra roles: {0} assignments, {1} groups expanded, {2} users hold a role [{3}] {4}" -f $assign.Count, $r.GroupsExpanded, $r.ByUser.Count, $r.Status, $r.Note)
+    return $r
+}
 
 $domainName = ''
 $ctx = $null
+$SyncNamePatterns = @('MSOL_*', 'Sync_*', 'AAD_*', 'ADSyncMSA*')
 try {
     Write-RunLog ("{0} v{1} starting. Output: {2}" -f $ScriptName, $ScriptVersion, $script:RunFolder)
+    if ($IncludeComputers) { Write-RunLog '-IncludeComputers is no longer needed: computers are included by default (-SkipComputers leaves them out).' }
     Import-Module ActiveDirectory -ErrorAction Stop
     $domainName = (Get-ADDomain @script:AdParams).DNSRoot
     $now = $script:RunStartUtc
@@ -261,13 +361,16 @@ try {
     # ---- AD users ----
     $p = @{} + $script:AdParams
     if ($SearchBase) { $p['SearchBase'] = $SearchBase }
-    $props = @('sAMAccountName', 'userPrincipalName', 'enabled', 'whenCreated', 'lastLogonTimestamp', 'pwdLastSet', 'userAccountControl', 'objectGUID', 'mS-DS-ConsistencyGuid')
+    $props = @('sAMAccountName', 'userPrincipalName', 'enabled', 'whenCreated', 'lastLogonTimestamp', 'pwdLastSet', 'userAccountControl', 'objectGUID', 'mS-DS-ConsistencyGuid',
+        'memberOf', 'adminCount', 'servicePrincipalName', 'manager', 'managedBy', 'description')
     $adUsers = @(Get-ADUser -Filter * -Properties $props @p)
     Write-RunLog ("{0} AD users read" -f $adUsers.Count)
+    $samByDn = @{}
+    foreach ($u in $adUsers) { $samByDn["$($u.DistinguishedName)".ToLowerInvariant()] = $u.SamAccountName }
 
     # ---- Entra users ----
     $ctx = Connect-DiscoveryGraph
-    $select = 'id,userPrincipalName,displayName,accountEnabled,userType,createdDateTime,onPremisesSyncEnabled,onPremisesImmutableId'
+    $select = 'id,userPrincipalName,displayName,accountEnabled,userType,createdDateTime,onPremisesSyncEnabled,onPremisesImmutableId,onPremisesDomainName,onPremisesSamAccountName,assignedLicenses,signInSessionsValidFromDateTime'
     $signInAvailable = $true
     try { $entra = Invoke-GraphGetAll -Uri "https://graph.microsoft.com/v1.0/users?`$select=$select,signInActivity&`$top=999" -Label 'users' }
     catch {
@@ -277,8 +380,29 @@ try {
     }
     Write-RunLog ("{0} Entra users read" -f $entra.Count)
     $entraByAnchor = @{}
-    foreach ($e in $entra) { if ($e.onPremisesImmutableId) { $entraByAnchor[$e.onPremisesImmutableId] = $e } }
+    $anchorGroups = @{}
+    $userIds = @{}
+    foreach ($e in $entra) {
+        $userIds[[string]$e.id] = $true
+        if (-not $e.onPremisesImmutableId) { continue }
+        $k = [string]$e.onPremisesImmutableId
+        if (-not $anchorGroups.ContainsKey($k)) { $anchorGroups[$k] = [System.Collections.Generic.List[object]]::new() }
+        $anchorGroups[$k].Add($e)
+        if (-not $entraByAnchor.ContainsKey($k)) { $entraByAnchor[$k] = $e }   # first one wins; duplicates listed in duplicate-anchors
+    }
+    $dupRows = foreach ($k in $anchorGroups.Keys) {
+        if ($anchorGroups[$k].Count -lt 2) { continue }
+        foreach ($e in $anchorGroups[$k]) {
+            [pscustomobject][ordered]@{ OnPremisesImmutableId = $k; UserPrincipalName = $e.userPrincipalName; EntraObjectId = $e.id; AccountEnabled = $e.accountEnabled
+                OnPremisesSyncEnabled = $e.onPremisesSyncEnabled; UsedForMatch = ($entraByAnchor[$k].id -eq $e.id); SharedBy = $anchorGroups[$k].Count }
+        }
+    }
     $matchedEntra = @{}
+
+    # ---- Entra directory roles ----
+    $roles = $null
+    if ($SkipEntraRoles) { Write-RunLog 'Entra roles skipped (-SkipEntraRoles); HoldsEntraRole is blank.' }
+    else { $roles = Get-EntraRoleHolders -UserIds $userIds }
 
     function Get-EntraActivity {
         param($E)
@@ -292,6 +416,47 @@ try {
         return $r
     }
 
+    # ---- Pair AD users with Entra twins ----
+    $pairs = [System.Collections.Generic.List[object]]::new()
+    foreach ($u in $adUsers) {
+        $e = $null
+        $key = Get-AnchorKey $u
+        if ($key -and $entraByAnchor.ContainsKey($key)) { $e = $entraByAnchor[$key]; $matchedEntra[$e.id] = $true }
+        $pairs.Add([pscustomobject]@{ Ad = $u; E = $e })
+    }
+
+    # ---- Optional precise lastLogon (every DC, stale candidates only) ----
+    $precise = @{}
+    $dcNote = ''
+    if ($PreciseLastLogon) {
+        $cands = @($pairs | Where-Object {
+                $adLast = ConvertFrom-FileTime $_.Ad.lastLogonTimestamp
+                $newest = @($adLast, (Get-EntraActivity $_.E).Newest | Where-Object { $_ }) | Sort-Object -Descending | Select-Object -First 1
+                (-not $newest) -or (($now - $newest).TotalDays -gt $StaleDays)
+            })
+        $dcs = @()
+        try { $dcs = @(Get-ADDomainController -Filter * @script:AdParams | Where-Object { $_.HostName }) }
+        catch { Write-RunLog ("Domain controllers not listed: {0}" -f $_.Exception.Message) 'WARN' }
+        $dcOk = 0; $dcFail = [System.Collections.Generic.List[string]]::new()
+        foreach ($dc in $dcs) {
+            $dcp = @{ Server = [string]$dc.HostName }
+            $failed = $false
+            foreach ($c in $cands) {
+                try {
+                    $one = Get-ADUser -Identity $c.Ad.DistinguishedName -Properties lastLogon @dcp
+                    $t = ConvertFrom-FileTime $one.lastLogon
+                    $dn = [string]$c.Ad.DistinguishedName
+                    if ($t -and (-not $precise.ContainsKey($dn) -or $t -gt $precise[$dn])) { $precise[$dn] = $t }
+                }
+                catch { $failed = $true; Write-RunLog ("lastLogon not readable on {0}: {1}; skipping this DC." -f $dc.HostName, $_.Exception.Message) 'WARN'; break }
+            }
+            if ($failed) { $dcFail.Add([string]$dc.HostName) } else { $dcOk++ }
+        }
+        $dcNote = "PreciseLastLogon: {0} candidates, {1} of {2} DCs read" -f $cands.Count, $dcOk, $dcs.Count
+        if ($dcFail.Count) { $dcNote += ' (unreachable: ' + ($dcFail -join ', ') + ' - precise values may be incomplete)' }
+        Write-RunLog $dcNote
+    }
+
     $rows = [System.Collections.Generic.List[object]]::new()
     function Add-IdentityRow {
         param($Ad, $E)
@@ -299,22 +464,56 @@ try {
         $enEnabled = $(if ($E) { [bool]$E.accountEnabled } else { $null })
         if ($EnabledOnly -and -not ($adEnabled -or $enEnabled)) { return }
         $adLast = $(if ($Ad -and $Ad.lastLogonTimestamp) { [datetime]::FromFileTimeUtc([int64]$Ad.lastLogonTimestamp) } else { $null })
+        $adPrecise = $(if ($Ad -and $precise.ContainsKey([string]$Ad.DistinguishedName)) { $precise[[string]$Ad.DistinguishedName] } else { $null })
+        if ($adPrecise -and (-not $adLast -or $adPrecise -gt $adLast)) { $adLast = $adPrecise }
         $act = Get-EntraActivity $E
         $newest = @($adLast, $act.Newest | Where-Object { $_ }) | Sort-Object -Descending | Select-Object -First 1
         $days = $(if ($newest) { [int]($now - $newest).TotalDays } else { '' })
-        $created = @($(if ($Ad) { ConvertTo-UtcDate $Ad.whenCreated }), $(if ($E) { ConvertTo-UtcDate $E.createdDateTime }) | Where-Object { $_ }) | Sort-Object | Select-Object -First 1
+        $adCreated = $(if ($Ad) { ConvertTo-UtcDate $Ad.whenCreated } else { $null })
+        $created = @($adCreated, $(if ($E) { ConvertTo-UtcDate $E.createdDateTime }) | Where-Object { $_ }) | Sort-Object | Select-Object -First 1
         $source = $(if ($Ad -and $E) { 'Hybrid' } elseif ($Ad) { 'ADOnly' } else { 'CloudOnly' })
+        $isStale = (-not $newest) -or ($days -gt $StaleDays)
+
+        # AD context
+        $uac = $(if ($Ad) { [int]$Ad.userAccountControl } else { 0 })
+        $pne = [bool]($uac -band 65536)
+        $pwdSet = $(if ($Ad) { ConvertFrom-FileTime $Ad.pwdLastSet } else { $null })
+        $sam = $(if ($Ad) { [string]$Ad.SamAccountName } else { '' })
+        $hasSpn = $(if ($Ad) { (@($Ad.servicePrincipalName | Where-Object { $_ }).Count -gt 0) } else { '' })
+        $adminCount = $(if ($Ad) { $(if ("$($Ad.adminCount)" -eq '1') { 1 } else { 0 }) } else { '' })
+        $mgrName = ''
+        if ($Ad -and $Ad.manager) { $mk = "$($Ad.manager)".ToLowerInvariant(); $mgrName = $(if ($samByDn.ContainsKey($mk)) { $samByDn[$mk] } else { Get-CnFromDn $Ad.manager }) }
+        $isAdminNamed = $(if ($Ad) { Test-NamePattern $sam $AdminNamePatterns } else { '' })
+        $isSvcNamed = ($Ad -and (Test-NamePattern $sam $ServiceNamePatterns))
+        $isSync = ($Ad -and (Test-NamePattern $sam $SyncNamePatterns))
+        $category = $(if ($E -and $E.userType -eq 'Guest') { 'Guest' } elseif ($isSync) { 'Sync' } elseif ($isAdminNamed -eq $true -or $adminCount -eq 1) { 'Admin' } elseif ($hasSpn -eq $true -or $isSvcNamed) { 'Service' } else { 'User' })
+
+        # Entra context
+        $licCount = $(if ($E) { @($E.assignedLicenses | Where-Object { $_ }).Count } else { '' })
+        $holdsRole = ''; $roleText = ''
+        if ($E -and $roles) {
+            if ($roles.ByUser.ContainsKey([string]$E.id)) { $holdsRole = 'True'; $roleText = Join-Values ($roles.ByUser[[string]$E.id] | Sort-Object) }
+            elseif ($roles.Status -eq 'Completed') { $holdsRole = 'False' }
+            else { $holdsRole = $(if ($roles.Status -eq 'Partial') { 'Unknown (Partial)' } else { 'EvidenceUnavailable' }) }
+        }
+
         $flags = @()
         if (-not $newest) { $flags += 'NeverUsed' }
         elseif ($days -gt $StaleDays) { $flags += "Stale(>${StaleDays}d)" }
         if ($Ad -and $E -and ($adEnabled -ne $enEnabled)) { $flags += 'EnabledMismatch' }
         if (-not $newest -and $created -and ($now - $created).TotalDays -gt $NewAccountGraceDays) { $flags += 'CreatedButNeverUsed' }
-        if ($Ad -and ([int]$Ad.userAccountControl -band 65536)) { $flags += 'PasswordNeverExpires' }
+        if ($Ad -and $pne) { $flags += 'PasswordNeverExpires' }
         if ($E -and $E.userType -eq 'Guest') { $flags += 'Guest' }
         if ($source -eq 'CloudOnly' -and -not $signInAvailable) { $flags += 'NoActivityData' }
+        if ($isStale -and ($adminCount -eq 1 -or $holdsRole -eq 'True')) { $flags += 'StaleButPrivileged' }
+        if ($isStale -and $licCount -ne '' -and $licCount -gt 0) { $flags += 'StaleButLicensed' }
+        if ($E -and -not $enEnabled -and $licCount -gt 0) { $flags += 'DisabledButLicensed' }
+        if ($Ad -and -not $adLast -and $adCreated -and ($now - $adCreated).TotalDays -gt $StaleDays) { $flags += 'NeverLoggedOn' }
+        if ($pne -and $pwdSet -and ($now - $pwdSet).TotalDays -gt $PasswordAgeDays) { $flags += 'PasswordNeverExpiresOld' }
+        if ($Ad -and ($hasSpn -eq $true -or $isSvcNamed) -and -not $Ad.manager -and -not $Ad.managedBy) { $flags += 'ServiceAccountNoOwner' }
         $rows.Add([pscustomobject][ordered]@{
             Source                  = $source
-            SamAccountName          = $(if ($Ad) { $Ad.SamAccountName } else { '' })
+            SamAccountName          = $sam
             UserPrincipalName       = $(if ($E) { $E.userPrincipalName } elseif ($Ad) { $Ad.UserPrincipalName } else { '' })
             UserType                = $(if ($E) { $E.userType } else { '' })
             ADEnabled               = $adEnabled
@@ -329,68 +528,147 @@ try {
             DaysSinceActivity       = $days
             ActivityBucket          = Get-Bucket $days
             Flags                   = Join-Values $flags
+            PwdLastSetUtc           = Format-Utc $pwdSet
+            PasswordNeverExpires    = $(if ($Ad) { $pne } else { '' })
+            MemberOfCount           = $(if ($Ad) { @($Ad.memberOf | Where-Object { $_ }).Count } else { '' })
+            AdminCount              = $adminCount
+            HasSPN                  = $hasSpn
+            Manager                 = $mgrName
+            IsAdminNamed            = $isAdminNamed
+            Category                = $category
+            AssignedLicenseCount    = $licCount
+            HoldsEntraRole          = $holdsRole
+            EntraRoles              = $roleText
+            SignInSessionsValidFromUtc = $(if ($E) { Format-Utc (ConvertTo-UtcDate $E.signInSessionsValidFromDateTime) } else { '' })
+            ADLastLogonPrecise      = $(if ($adPrecise) { 'True' } elseif ($PreciseLastLogon -and $Ad -and $isStale) { 'NoDcLogon' } else { '' })
         })
     }
 
-    foreach ($u in $adUsers) {
-        $anchorBytes = $(if ($AnchorAttribute -eq 'objectGUID') { $u.ObjectGUID.ToByteArray() } elseif ($u.'mS-DS-ConsistencyGuid') { [byte[]]$u.'mS-DS-ConsistencyGuid' } else { $null })
-        $e = $null
-        if ($anchorBytes) {
-            $key = [Convert]::ToBase64String($anchorBytes)
-            if ($entraByAnchor.ContainsKey($key)) { $e = $entraByAnchor[$key]; $matchedEntra[$e.id] = $true }
-        }
-        Add-IdentityRow -Ad $u -E $e
-    }
+    foreach ($pr in $pairs) { Add-IdentityRow -Ad $pr.Ad -E $pr.E }
     foreach ($e in $entra) {
         if ($matchedEntra.ContainsKey($e.id)) { continue }
-        if ($e.onPremisesSyncEnabled) { continue }   # synced from another domain/forest or outside -SearchBase; see script 13
+        if ($e.onPremisesSyncEnabled) { continue }   # synced from another domain/forest or outside -SearchBase; see entra-synced-unmatched
         Add-IdentityRow -Ad $null -E $e
     }
-    $syncedUnmatched = @($entra | Where-Object { $_.onPremisesSyncEnabled -and -not $matchedEntra.ContainsKey($_.id) }).Count
-    Export-Dataset -Name 'identity-activity' -Rows $rows -Note $(if ($syncedUnmatched) { "$syncedUnmatched synced Entra users had no AD match in this scope (other domain, outside SearchBase, or different anchor) and are not listed" } else { '' })
+    $dupIds = @{}; foreach ($d in @($dupRows)) { if (-not $d.UsedForMatch) { $dupIds[[string]$d.EntraObjectId] = $true } }
+    $unmatchedRows = foreach ($e in $entra) {
+        if (-not $e.onPremisesSyncEnabled -or $matchedEntra.ContainsKey($e.id)) { continue }
+        $act = Get-EntraActivity $e
+        [pscustomobject][ordered]@{
+            UserPrincipalName        = $e.userPrincipalName
+            DisplayName              = $e.displayName
+            AccountEnabled           = $e.accountEnabled
+            OnPremisesDomainName     = $e.onPremisesDomainName
+            OnPremisesSamAccountName = $e.onPremisesSamAccountName
+            OnPremisesImmutableId    = $e.onPremisesImmutableId
+            NewestEntraActivityUtc   = Format-Utc $act.Newest
+            AssignedLicenseCount     = @($e.assignedLicenses | Where-Object { $_ }).Count
+            Reason                   = $(if ($dupIds.ContainsKey([string]$e.id)) { 'Shares a source anchor with another Entra user (see duplicate-anchors)' } elseif ($e.onPremisesDomainName -and $e.onPremisesDomainName -ne $domainName) { 'Synced from another domain' } else { 'No AD user with this anchor in this domain / SearchBase (deleted on-prem, out of scope, or different anchor)' })
+        }
+    }
+    $syncedUnmatched = @($unmatchedRows).Count
+    Export-Dataset -Name 'identity-activity' -Rows $rows -Note $(if ($syncedUnmatched) { "$syncedUnmatched synced Entra users had no AD match in this scope; listed in entra-synced-unmatched" } else { '' })
+    Export-Dataset -Name 'entra-synced-unmatched' -Rows $unmatchedRows -Note 'Synced Entra users not matched to an AD user read in this run'
+    Export-Dataset -Name 'duplicate-anchors' -Rows $dupRows -Note 'Entra users sharing one onPremisesImmutableId; only the first was matched to AD'
+    if ($roles -and $roles.Status -ne 'Completed') { Write-RunLog ("HoldsEntraRole is incomplete [{0}]: {1}" -f $roles.Status, $roles.Note) 'WARN' }
 
     # ---- Computers ----
     $compRows = @()
-    if (-not $IncludeComputers) { Set-DatasetStatus -Name 'ad-computers' -Status 'Deferred' -Note 'Run with -IncludeComputers' }
+    $compStatus = 'Completed'
+    if ($SkipComputers) { Set-DatasetStatus -Name 'ad-computers' -Status 'Deferred' -Note 'Skipped (-SkipComputers)'; $compStatus = 'Skipped' }
     else {
-        $comps = @(Get-ADComputer -Filter * -Properties enabled, lastLogonTimestamp, operatingSystem, whenCreated, pwdLastSet @p)
-        $compRows = foreach ($c in $comps) {
-            if ($EnabledOnly -and -not $c.Enabled) { continue }
-            $last = $(if ($c.lastLogonTimestamp) { [datetime]::FromFileTimeUtc([int64]$c.lastLogonTimestamp) } else { $null })
-            $pwdSet = $(if ($c.pwdLastSet) { [datetime]::FromFileTimeUtc([int64]$c.pwdLastSet) } else { $null })
+        try {
+            $comps = @(Get-ADComputer -Filter * -Properties enabled, lastLogonTimestamp, operatingSystem, whenCreated, pwdLastSet @p)
+            $compRows = foreach ($c in $comps) {
+                if ($EnabledOnly -and -not $c.Enabled) { continue }
+                $last = $(if ($c.lastLogonTimestamp) { [datetime]::FromFileTimeUtc([int64]$c.lastLogonTimestamp) } else { $null })
+                $pwdSet = $(if ($c.pwdLastSet) { [datetime]::FromFileTimeUtc([int64]$c.pwdLastSet) } else { $null })
+                $d = $(if ($last) { [int]($now - $last).TotalDays } else { '' })
+                [pscustomobject][ordered]@{
+                    Name              = $c.Name
+                    Enabled           = $c.Enabled
+                    OperatingSystem   = $c.OperatingSystem
+                    CreatedUtc        = Format-Utc (ConvertTo-UtcDate $c.whenCreated)
+                    LastLogonUtc      = Format-Utc $last
+                    PasswordLastSetUtc = Format-Utc $pwdSet
+                    DaysSinceLogon    = $d
+                    ActivityBucket    = Get-Bucket $d
+                    Stale             = (-not $last) -or ($d -gt $StaleDays)
+                    DistinguishedName = $c.DistinguishedName
+                }
+            }
+            Export-Dataset -Name 'ad-computers' -Rows $compRows -Note 'Computer passwords rotate every 30 days by default; an old PasswordLastSet confirms a dead machine'
+        }
+        catch { $compStatus = 'Blocked'; Set-DatasetStatus -Name 'ad-computers' -Status 'Blocked' -Note $_.Exception.Message }
+    }
+
+    # ---- Managed service accounts (gMSA / sMSA) ----
+    $msaRows = @()
+    $msaStatus = 'Completed'
+    try {
+        $msas = @(Get-ADServiceAccount -Filter * -Properties enabled, lastLogonTimestamp, pwdLastSet, whenCreated, servicePrincipalName, description, objectClass, PrincipalsAllowedToRetrieveManagedPassword @script:AdParams)
+        $msaRows = foreach ($m in $msas) {
+            $last = ConvertFrom-FileTime $m.lastLogonTimestamp
+            $pwdSet = ConvertFrom-FileTime $m.pwdLastSet
             $d = $(if ($last) { [int]($now - $last).TotalDays } else { '' })
+            $cls = [string]@($m.objectClass)[-1]
+            $isGmsa = ($cls -eq 'msDS-GroupManagedServiceAccount')
+            $retr = @($m.PrincipalsAllowedToRetrieveManagedPassword | Where-Object { $_ }).Count
+            $stale = (-not $last) -or ($d -gt $StaleDays)
             [pscustomobject][ordered]@{
-                Name              = $c.Name
-                Enabled           = $c.Enabled
-                OperatingSystem   = $c.OperatingSystem
-                CreatedUtc        = Format-Utc (ConvertTo-UtcDate $c.whenCreated)
-                LastLogonUtc      = Format-Utc $last
-                PasswordLastSetUtc = Format-Utc $pwdSet
-                DaysSinceLogon    = $d
-                ActivityBucket    = Get-Bucket $d
-                Stale             = (-not $last) -or ($d -gt $StaleDays)
-                DistinguishedName = $c.DistinguishedName
+                Name                       = $m.Name
+                SamAccountName             = $m.SamAccountName
+                Type                       = $(if ($isGmsa) { 'gMSA' } else { 'sMSA' })
+                Enabled                    = $m.Enabled
+                LastLogonUtc               = Format-Utc $last
+                DaysSinceLogon             = $d
+                ActivityBucket             = Get-Bucket $d
+                PasswordLastSetUtc         = Format-Utc $pwdSet
+                PrincipalsAllowedToRetrievePresent = $(if ($isGmsa) { $retr -gt 0 } else { '' })
+                SpnCount                   = @($m.servicePrincipalName | Where-Object { $_ }).Count
+                Stale                      = $stale
+                Flags                      = Join-Values @($(if ($stale) { "Stale(>${StaleDays}d)" }), $(if ($isGmsa -and $retr -eq 0) { 'NoPrincipalAllowedToRetrieve' }), $(if (Test-NamePattern $m.SamAccountName $SyncNamePatterns) { 'EntraConnectSync' }))
+                Description                = $m.Description
+                DistinguishedName          = $m.DistinguishedName
             }
         }
-        Export-Dataset -Name 'ad-computers' -Rows $compRows -Note 'Computer passwords rotate every 30 days by default; an old PasswordLastSet confirms a dead machine'
+        Export-Dataset -Name 'ad-managed-service-accounts' -Rows $msaRows -Note 'NoPrincipalAllowedToRetrieve = no host can use the gMSA; usually a leftover'
     }
+    catch { $msaStatus = 'Blocked'; Set-DatasetStatus -Name 'ad-managed-service-accounts' -Status 'Blocked' -Note $_.Exception.Message }
 
     # ---- Summary ----
     $summary = [System.Collections.Generic.List[object]]::new()
     function Add-Metric { param($Metric, $Value, $Note = '') $summary.Add([pscustomobject][ordered]@{ Metric = $Metric; Value = $Value; Note = $Note }) }
-    Add-Metric 'Identities' $rows.Count $(if ($EnabledOnly) { 'Enabled on at least one side' } else { 'All' })
+    function Get-FlagCount { param([string]$Flag) return @($rows | Where-Object { $_.Flags -match $Flag }).Count }
+    Add-Metric -Metric 'Identities' -Value $rows.Count -Note $(if ($EnabledOnly) { 'Enabled on at least one side' } else { 'All' })
     Add-Metric 'Entra sign-in activity available' $signInAvailable
+    Add-Metric -Metric 'Entra role evidence' -Value $(if ($SkipEntraRoles) { 'Skipped' } else { $roles.Status }) -Note $(if ($roles) { $roles.Note } else { '-SkipEntraRoles' })
     foreach ($src in 'Hybrid', 'ADOnly', 'CloudOnly') { Add-Metric "Identities: $src" @($rows | Where-Object Source -eq $src).Count }
+    foreach ($cat in 'User', 'Admin', 'Service', 'Sync', 'Guest') { Add-Metric "Identities: category $cat" @($rows | Where-Object Category -eq $cat).Count }
     foreach ($b in '0-30', '31-90', '91-180', '181-365', '365+') { Add-Metric "Last activity $b days ago" @($rows | Where-Object ActivityBucket -eq $b).Count }
-    Add-Metric 'No recorded activity (never)' @($rows | Where-Object ActivityBucket -eq 'Never').Count 'No activity on either side'
+    Add-Metric -Metric 'No recorded activity (never)' -Value @($rows | Where-Object ActivityBucket -eq 'Never').Count -Note 'No activity on either side'
     $enabledAnywhere = @($rows | Where-Object { $_.ADEnabled -or $_.EntraEnabled })
-    Add-Metric "Enabled identities stale over $StaleDays days or never used" @($enabledAnywhere | Where-Object { $_.Flags -match 'Stale|NeverUsed' }).Count 'Primary clean-up population'
-    Add-Metric 'Enabled on one side, disabled on the other' @($rows | Where-Object { $_.Flags -match 'EnabledMismatch' }).Count
-    Add-Metric "Created over $NewAccountGraceDays days ago, never used" @($rows | Where-Object { $_.Flags -match 'CreatedButNeverUsed' }).Count
-    Add-Metric 'Stale in AD but active in Entra (last 30 days)' @($rows | Where-Object { $_.Source -eq 'Hybrid' -and $_.NewestActivitySource -eq 'Entra' -and $_.DaysSinceActivity -ne '' -and $_.DaysSinceActivity -le 30 -and (-not $_.ADLastLogonUtc -or ($now - ([datetime]$_.ADLastLogonUtc).ToUniversalTime()).TotalDays -gt $StaleDays) }).Count 'AD-only staleness checks would wrongly flag these'
-    if ($IncludeComputers) {
+    Add-Metric -Metric "Enabled identities stale over $StaleDays days or never used" -Value @($enabledAnywhere | Where-Object { $_.Flags -match 'Stale\(|NeverUsed' }).Count -Note 'Primary clean-up population'
+    Add-Metric -Metric 'Stale or never used but privileged (adminCount or Entra role)' -Value (Get-FlagCount 'StaleButPrivileged') -Note $(if ($roles -and $roles.Status -ne 'Completed') { "Highest priority. At least this many: Entra role evidence $($roles.Status)" } elseif ($SkipEntraRoles) { 'Highest priority. adminCount only (-SkipEntraRoles)' } else { 'Highest priority' })
+    Add-Metric 'Stale or never used but licensed' (Get-FlagCount 'StaleButLicensed')
+    Add-Metric 'Disabled in Entra but still licensed' (Get-FlagCount 'DisabledButLicensed')
+    Add-Metric "AD accounts never logged on, created over $StaleDays days ago" (Get-FlagCount 'NeverLoggedOn')
+    Add-Metric "Password never expires and older than $PasswordAgeDays days" (Get-FlagCount 'PasswordNeverExpiresOld')
+    Add-Metric 'Service accounts with no manager / managedBy' (Get-FlagCount 'ServiceAccountNoOwner')
+    Add-Metric 'Enabled on one side, disabled on the other' (Get-FlagCount 'EnabledMismatch')
+    Add-Metric "Created over $NewAccountGraceDays days ago, never used" (Get-FlagCount 'CreatedButNeverUsed')
+    Add-Metric -Metric 'Stale in AD but active in Entra (last 30 days)' -Value @($rows | Where-Object { $_.Source -eq 'Hybrid' -and $_.NewestActivitySource -eq 'Entra' -and "$($_.DaysSinceActivity)" -ne '' -and $_.DaysSinceActivity -le 30 -and (-not $_.ADLastLogonUtc -or ($now - ([datetime]$_.ADLastLogonUtc).ToUniversalTime()).TotalDays -gt $StaleDays) }).Count -Note 'AD-only staleness checks would wrongly flag these'
+    Add-Metric -Metric 'Synced Entra users with no AD match in this scope' -Value $syncedUnmatched -Note 'entra-synced-unmatched.csv'
+    Add-Metric -Metric 'Entra source anchors shared by more than one user' -Value @($dupRows | Select-Object -ExpandProperty OnPremisesImmutableId -Unique).Count -Note 'duplicate-anchors.csv'
+    if ($PreciseLastLogon) { Add-Metric -Metric 'Precise lastLogon (all DCs)' -Value $precise.Count -Note $dcNote }
+    if (-not $SkipComputers -and $compStatus -eq 'Completed') {
         Add-Metric 'Computers' @($compRows).Count
         Add-Metric "Computers stale over $StaleDays days or never logged on" @($compRows | Where-Object Stale).Count
+    }
+    if ($msaStatus -eq 'Completed') {
+        Add-Metric 'Managed service accounts (gMSA / sMSA)' @($msaRows).Count
+        Add-Metric "Managed service accounts stale over $StaleDays days" @($msaRows | Where-Object Stale).Count
+        Add-Metric 'gMSAs no principal may retrieve' @($msaRows | Where-Object { $_.Flags -match 'NoPrincipalAllowedToRetrieve' }).Count
     }
     Export-Dataset -Name 'summary' -Rows $summary
 }
@@ -399,6 +677,6 @@ catch {
     throw
 }
 finally {
-    Write-RunManifest -DomainName $domainName -Context $ctx -Parameters @{ SearchBase = $SearchBase; AnchorAttribute = $AnchorAttribute; StaleDays = $StaleDays; NewAccountGraceDays = $NewAccountGraceDays; EnabledOnly = [bool]$EnabledOnly; IncludeComputers = [bool]$IncludeComputers }
+    Write-RunManifest -DomainName $domainName -Context $ctx -Parameters @{ SearchBase = $SearchBase; AnchorAttribute = $AnchorAttribute; StaleDays = $StaleDays; NewAccountGraceDays = $NewAccountGraceDays; PasswordAgeDays = $PasswordAgeDays; EnabledOnly = [bool]$EnabledOnly; SkipComputers = [bool]$SkipComputers; SkipEntraRoles = [bool]$SkipEntraRoles; PreciseLastLogon = [bool]$PreciseLastLogon; AdminNamePatterns = $AdminNamePatterns; ServiceNamePatterns = $ServiceNamePatterns }
     Write-RunLog ("Finished. Evidence folder: {0}" -f $script:RunFolder)
 }

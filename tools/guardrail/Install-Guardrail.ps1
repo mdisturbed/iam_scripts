@@ -23,7 +23,7 @@ try {
         Write-Host "Private denylist already present: $deny"
     }
 
-    $ignored = git check-ignore -q $deny; if ($LASTEXITCODE -ne 0) { throw 'denylist.local.txt is NOT ignored by git - fix .gitignore before continuing' }
+    $null = git check-ignore -q $deny; if ($LASTEXITCODE -ne 0) { throw 'denylist.local.txt is NOT ignored by git - fix .gitignore before continuing' }
     Write-Host 'Confirmed: the private denylist is gitignored.'
 
     & (Join-Path $here 'Invoke-Guardrail.ps1') -Mode All

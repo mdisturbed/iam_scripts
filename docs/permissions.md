@@ -6,32 +6,32 @@ Everything here is read-only. Ask for the narrowest option that works and, where
 
 | Script | Entra role | Graph scopes | Other access | Modules |
 |--------|-----------|--------------|--------------|---------|
-| 01 MFA coverage | Global Reader | Policy.Read.All, Directory.Read.All, AuditLog.Read.All, UserAuthenticationMethod.Read.All | | Graph Auth |
-| 02 Privileged access | Global Reader | RoleManagement.Read.Directory, Directory.Read.All, AuditLog.Read.All, UserAuthenticationMethod.Read.All | | Graph Auth |
-| 03 Apps and consents | Global Reader | Application.Read.All, Directory.Read.All, Policy.Read.All, AuditLog.Read.All | | Graph Auth |
-| 04 AD privileged / service | | | Domain read | RSAT AD |
-| 05 AD group nesting | | | Domain read | RSAT AD |
+| 01 MFA coverage | Global Reader | Policy.Read.All, Directory.Read.All, AuditLog.Read.All, UserAuthenticationMethod.Read.All, RoleManagement.Read.Directory, PrivilegedEligibilitySchedule.Read.AzureADGroup | | Graph Auth |
+| 02 Privileged access | Global Reader | RoleManagement.Read.Directory, Directory.Read.All, AuditLog.Read.All, UserAuthenticationMethod.Read.All, PrivilegedEligibilitySchedule.Read.AzureADGroup (+ Policy.Read.All with `-BreakGlassUpns`) | | Graph Auth |
+| 03 Apps and consents | Global Reader | Application.Read.All, Directory.Read.All, Policy.Read.All, AuditLog.Read.All, RoleManagement.Read.Directory, PrivilegedEligibilitySchedule.Read.AzureADGroup | | Graph Auth |
+| 04 AD privileged / service | | | Domain read; read of the forest root domain when run in a child domain | RSAT AD |
+| 05 AD group nesting | | | Domain read; read of the forest root domain when run in a child domain | RSAT AD |
 | 06 JML timing | (Global Reader with `-IncludeEntraSignIn`) | (User.Read.All, AuditLog.Read.All) | Domain read; read of replication metadata | RSAT AD (+ Graph Auth) |
 | 07 Role mining | | | Domain read | RSAT AD |
-| 08 Extension attributes | (Global Reader with `-IncludeEntra`) | (Directory.Read.All, Application.Read.All; + CustomSecAttributeDefinition.Read.All) | Domain read; (Attribute Definition Reader for custom security attributes) | RSAT AD (+ Graph Auth) |
-| 09 Mail and sharing | Global Reader | SharePointTenantSettings.Read.All | Exchange: Global Reader or View-Only Organization Management; (SharePoint Administrator or Global Reader for `-IncludeSiteSharing`) | ExchangeOnlineManagement, Graph Auth (+ SPO module) |
-| 10 Guests | Global Reader | User.Read.All, Directory.Read.All, AuditLog.Read.All, Policy.Read.All | | Graph Auth |
+| 08 Extension attributes | (Global Reader with `-IncludeEntra`) | (Directory.Read.All, Application.Read.All, Policy.Read.All; + CustomSecAttributeDefinition.Read.All, CustomSecAttributeAssignment.Read.All) | Domain read; (Attribute Definition Reader and Attribute Assignment Reader for custom security attributes) | RSAT AD (+ Graph Auth) |
+| 09 Mail and sharing | Global Reader | SharePointTenantSettings.Read.All | Exchange: Global Reader or View-Only Organization Management; SharePoint Administrator or Global Reader for per-site sharing (on by default when the SPO module is installed) | ExchangeOnlineManagement, Graph Auth (+ SPO module) |
+| 10 Guests | Global Reader | User.Read.All, Directory.Read.All, AuditLog.Read.All, Policy.Read.All, RoleManagement.Read.Directory, PrivilegedEligibilitySchedule.Read.AzureADGroup | | Graph Auth |
 | 11 Azure RBAC | Global Reader | Directory.Read.All | Azure **Reader** at root management group (or each subscription) | Az.Accounts, Graph Auth |
-| 12 Stale accounts | Global Reader | User.Read.All, AuditLog.Read.All | Domain read | RSAT AD, Graph Auth |
-| 13 Sync scope | Global Reader | User.Read.All, Group.Read.All, Organization.Read.All (+ OnPremDirectorySynchronization.Read.All) | Domain read | RSAT AD, Graph Auth |
+| 12 Stale accounts | Global Reader | User.Read.All, AuditLog.Read.All, RoleManagement.Read.Directory, GroupMember.Read.All | Domain read | RSAT AD, Graph Auth |
+| 13 Sync scope | Global Reader | User.Read.All, Group.Read.All, Organization.Read.All, RoleManagement.Read.Directory, GroupMember.Read.All, Device.Read.All (+ OnPremDirectorySynchronization.Read.All) | Domain read | RSAT AD, Graph Auth |
 | 14 IGA reconciliation | | | Domain read; IGA exports supplied by the IGA owner | RSAT AD |
-| 15 Rule-managed access | | | Domain read; role files | RSAT AD |
-| 16 Device posture | Global Reader (or Intune Read Only Operator + Global Reader) | Device.Read.All, Policy.Read.All, DeviceManagementManagedDevices.Read.All, DeviceManagementConfiguration.Read.All | | Graph Auth |
-| 17 AWS IAM posture | | | AWS SecurityAudit + ViewOnlyAccess in each account (read-only role); IAM Identity Center read | AWS.Tools.* |
+| 15 Rule-managed access | | | Domain read; schema read (falls back to probing each attribute); role files | RSAT AD |
+| 16 Device posture | Global Reader (or Intune Read Only Operator + Global Reader) | Device.Read.All, Policy.Read.All, Directory.Read.All, DeviceLocalCredential.ReadBasic.All, BitlockerKey.ReadBasic.All, DeviceManagementManagedDevices.Read.All, DeviceManagementConfiguration.Read.All, DeviceManagementServiceConfig.Read.All, DeviceManagementApps.Read.All | | Graph Auth |
+| 17 AWS IAM posture | | | AWS SecurityAudit + ViewOnlyAccess in each account (read-only role); IAM Identity Center read; Organizations policy read from the management account | AWS.Tools.* |
 | 18 AD delegation | | | Domain read (DACLs are readable by authenticated users on most objects) | RSAT AD |
-| 19 DC auth protocols | | | **Event Log Readers** on domain controllers; RPC to DCs; audit policy enabled | RSAT AD, Windows |
-| 20 Governance coverage | Global Reader | AccessReview.Read.All, EntitlementManagement.Read.All, Application.Read.All, Group.Read.All, GroupMember.Read.All, RoleManagement.Read.Directory | | Graph Auth |
-| 21 Identity risk | Security Reader or Global Reader | IdentityRiskyUser.Read.All, IdentityRiskEvent.Read.All, Policy.Read.All, RoleManagement.Read.Directory (+ IdentityRiskyServicePrincipal.Read.All) | | Graph Auth |
-| 22 PIM role settings | Global Reader | RoleManagementPolicy.Read.Directory, RoleManagement.Read.Directory | | Graph Auth |
+| 19 DC auth protocols | | | **Event Log Readers** on domain controllers; RPC to DCs; audit policy enabled; NTLM auditing for event 8004; domain read | RSAT AD, Windows |
+| 20 Governance coverage | Global Reader | AccessReview.Read.All, EntitlementManagement.Read.All, Application.Read.All, Group.Read.All, GroupMember.Read.All, RoleManagement.Read.Directory, Directory.Read.All, LifecycleWorkflows.Read.All, PrivilegedEligibilitySchedule.Read.AzureADGroup | | Graph Auth |
+| 21 Identity risk | Security Reader or Global Reader | IdentityRiskyUser.Read.All, IdentityRiskEvent.Read.All, Policy.Read.All, RoleManagement.Read.Directory, Directory.Read.All, AuditLog.Read.All, PrivilegedEligibilitySchedule.Read.AzureADGroup (+ IdentityRiskyServicePrincipal.Read.All) | | Graph Auth |
+| 22 PIM role settings | Global Reader | RoleManagementPolicy.Read.Directory, RoleManagement.Read.Directory, Directory.Read.All, Policy.Read.All, PrivilegedEligibilitySchedule.Read.AzureADGroup, RoleManagementPolicy.Read.AzureADGroup, RoleManagementAlert.Read.Directory | | Graph Auth |
 | 23 AD attribute population | | | Domain and schema read | RSAT AD |
-| 24 CA report-only impact | Global Reader or Security Reader | Policy.Read.All, AuditLog.Read.All | | Graph Auth |
-| 25 Purview classification and DLP | Global Reader | | Purview Global Reader role group; Information Protection Readers + Content Explorer List viewer for `-IncludeContentExplorer` | ExchangeOnlineManagement |
-| 26 PAM vault coverage | | | PAM account export; earlier runs of 02 / 04 / 11 / 17 | none |
+| 24 CA report-only impact | Global Reader or Security Reader | Policy.Read.All, AuditLog.Read.All, RoleManagement.Read.Directory, Directory.Read.All, PrivilegedEligibilitySchedule.Read.AzureADGroup | | Graph Auth |
+| 25 Purview classification and DLP | Global Reader | | Purview Global Reader role group; Information Protection Readers + Content Explorer List viewer for `-IncludeContentExplorer`; a role group with Activity explorer access for `-IncludeActivityExplorer`; (AIPService module on Windows PowerShell 5.1 for label super users) | ExchangeOnlineManagement |
+| 26 PAM vault coverage | | | PAM account export; earlier runs of 02 / 04 / 11 / 17 / 18 | none |
 
 Items in brackets apply only when the matching optional switch is used.
 
@@ -50,27 +50,36 @@ All scopes used anywhere in the repository:
 
 | Scope | Used by |
 |-------|---------|
-| `Directory.Read.All` | 01, 02, 03, 08, 10, 11 |
-| `Device.Read.All` | 16 |
-| `DeviceManagementManagedDevices.Read.All` | 16 |
-| `DeviceManagementConfiguration.Read.All` | 16 |
+| `Directory.Read.All` | 01, 02, 03, 08, 10, 11, 16, 20, 21, 22, 24 |
+| `User.Read.All` | 06, 10, 12, 13 |
+| `Group.Read.All` | 13, 20 |
+| `GroupMember.Read.All` | 12, 13, 20 |
+| `Application.Read.All` | 03, 08, 20 |
+| `Organization.Read.All` | 13 |
+| `Policy.Read.All` | 01, 02 (`-BreakGlassUpns` only), 03, 08, 10, 16, 21, 22, 24 |
+| `AuditLog.Read.All` | 01, 02, 03, 06, 10, 12, 21, 24 |
+| `UserAuthenticationMethod.Read.All` | 01, 02 |
+| `RoleManagement.Read.Directory` | 01, 02, 03, 10, 12, 13, 20, 21, 22, 24 |
+| `PrivilegedEligibilitySchedule.Read.AzureADGroup` | 01, 02, 03, 10, 20, 21, 22, 24 |
+| `RoleManagementPolicy.Read.Directory` | 22 |
+| `RoleManagementPolicy.Read.AzureADGroup` | 22 |
+| `RoleManagementAlert.Read.Directory` | 22 |
 | `AccessReview.Read.All` | 20 |
 | `EntitlementManagement.Read.All` | 20 |
-| `GroupMember.Read.All` | 20 |
+| `LifecycleWorkflows.Read.All` | 20 |
 | `IdentityRiskyUser.Read.All` | 21 |
 | `IdentityRiskEvent.Read.All` | 21 |
 | `IdentityRiskyServicePrincipal.Read.All` | 21 (optional; needs Workload Identities Premium) |
-| `RoleManagementPolicy.Read.Directory` | 22 |
-| `User.Read.All` | 06, 10, 12, 13 |
-| `Group.Read.All` | 13, 20 |
-| `Policy.Read.All` | 01, 03, 10, 16, 21, 24 |
-| `AuditLog.Read.All` | 01, 02, 03, 06, 10, 12, 24 |
-| `UserAuthenticationMethod.Read.All` | 01, 02 |
-| `RoleManagement.Read.Directory` | 02, 20, 21, 22 |
-| `Application.Read.All` | 03, 08, 20 |
-| `Organization.Read.All` | 13 |
+| `Device.Read.All` | 13, 16 |
+| `DeviceLocalCredential.ReadBasic.All` | 16 (metadata only; never the password) |
+| `BitlockerKey.ReadBasic.All` | 16 (metadata only; never the key) |
+| `DeviceManagementManagedDevices.Read.All` | 16 |
+| `DeviceManagementConfiguration.Read.All` | 16 |
+| `DeviceManagementServiceConfig.Read.All` | 16 |
+| `DeviceManagementApps.Read.All` | 16 |
 | `SharePointTenantSettings.Read.All` | 09 |
 | `CustomSecAttributeDefinition.Read.All` | 08 (`-IncludeCustomSecurityAttributes` only) |
+| `CustomSecAttributeAssignment.Read.All` | 08 (`-IncludeCustomSecurityAttributes` only) |
 | `OnPremDirectorySynchronization.Read.All` | 13 (`-IncludeSyncFeatures` only) |
 
 ## Licence-dependent data

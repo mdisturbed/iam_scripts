@@ -52,16 +52,16 @@ Pick one or two facts per script that you can confirm independently in the porta
 | Script | Check against |
 |--------|---------------|
 | 01 MFA coverage | Number of CA policies and their states in the Entra portal; one known exclusion group appears in `ca-exclusions.csv` |
-| 02 Privileged access | Global Administrator count in Entra > Roles; one known PIM-eligible admin appears as eligible |
+| 02 Privileged access | Global Administrator count in Entra > Roles; one known PIM-eligible admin appears as eligible; a member of a role-holding group appears in `privileged-principals-effective.csv` with `Via = Group member` |
 | 03 Apps and consents | One known app registration's secret expiry date; one third-party app's granted permissions in Enterprise apps > Permissions |
-| 04 AD privileged | Domain Admins membership in ADUC, including a nested group if one exists |
-| 05 Group nesting | Total group count (`(Get-ADGroup -Filter *).Count`); one known nested group's `DepthDown` |
+| 04 AD privileged | Domain Admins membership in ADUC, including a nested group if one exists; one server you know is trusted for delegation appears in `ad-account-risk-flags.csv`; krbtgt password age matches its `pwdLastSet` |
+| 05 Group nesting | Total group count (`(Get-ADGroup -Filter *).Count`); one known nested group's `DepthDown`; one group's `EffectiveUsers` in `ad-group-reach.csv` matches `(Get-ADGroupMember <group> -Recursive).Count` for users |
 | 06 JML timing | One recent leaver: termination date in HR vs account disable date in AD |
 | 07 Role mining | Size of one department population vs an HR headcount; one group you know every member of that department has |
 | 08 Extension attributes | One attribute you know is in use shows `InUse`, with a plausible count |
 | 09 Mail and sharing | One known forwarding mailbox or inbox rule (if any); tenant sharing level in the SharePoint admin center |
 | 10 Guests | Total guest count in Entra > Users (filter: Guest) |
-| 11 Azure RBAC | Owner assignments on one subscription in the portal (Access control (IAM)) |
+| 11 Azure RBAC | Owner assignments on one subscription in the portal (Access control (IAM)); a member of a group with a role there appears in `azure-effective-users.csv` |
 | 12 Stale accounts | One account you know is active on both sides shows `0-30`; one disabled leaver shows as stale or disabled |
 | 13 Sync scope | Last sync time in Entra Connect Health or the portal; one OU you know is excluded shows `OutOfScope` |
 | 14 IGA reconciliation | `iga-input-profile.csv` systems and status values look right; one account you know was created outside the IGA appears |
@@ -69,7 +69,7 @@ Pick one or two facts per script that you can confirm independently in the porta
 | 16 Device posture | Device counts by join type vs Entra > Devices; one known non-compliant device in Intune |
 | 17 AWS IAM | Root MFA status in one account's IAM dashboard; one known cross-account role's trust policy |
 | 18 AD delegation | One delegation you know exists (e.g. helpdesk reset-password on a user OU) appears with the right OU and trustee |
-| 19 DC auth protocols | `LogStartsUtc` matches the oldest event in Event Viewer on one DC; one known NTLM application server appears |
+| 19 DC auth protocols | `LogStartsUtc` matches the oldest event in Event Viewer on one DC; one known NTLM application server appears; `ntlm-dc-audit-8004` is either populated or marked unavailable (NTLM auditing off), never silently empty |
 | 20 Governance coverage | Number of access reviews in Identity Governance; one app you know is reviewed shows `Covered` |
 | 21 Identity risk | Risky user count in Entra ID Protection > Risky users |
 | 22 PIM role settings | Global Administrator settings in PIM > Entra roles > Settings |
@@ -85,14 +85,16 @@ Expect to adjust these on the first run and record the values used. They're writ
 | Script | Usually tuned |
 |--------|---------------|
 | 04, 06, 07, 14, 15 | Service / admin account name patterns (`-ServiceNamePatterns`, `-ExcludeNamePatterns`) |
+| 04, 12, 14, 18 | `-AdminNamePatterns` to the admin naming standard (the same list everywhere) |
+| 02 | `-BreakGlassUpns` once the emergency accounts are confirmed |
 | 05 | `-NamingConventionRegex` once a convention is agreed |
 | 06 | HR column names, `-HrDateFormat`, `-TerminatedStatusValues`, `-AdMatchAttribute` |
-| 07 | `-GroupingAttributes` (add the job-code attribute), `-MinPopulation`, thresholds |
+| 07 | `-GroupingAttributes` (add the job-code attribute), `-LayeredAttributes department,title`, `-MinPopulation`, thresholds |
 | 08 | `-AdditionalAttributes`, `-SampleValueCount 0` if values are sensitive |
 | 12, 13 | `-AnchorAttribute` if Entra Connect uses `mS-DS-ConsistencyGuid` |
 | 17 | `-Region`, `-IdentityCenterRegion`, `-AssumeRoleName` |
 | 18 | `-AdminNamePatterns` to the admin naming standard, `-AdditionalPrivilegedGroups` |
-| 19 | `-Hours` to fit how much Security log the DCs hold |
+| 19 | `-Hours` to fit how much Security log the DCs hold (168 for a week when the log allows) |
 | 20 | `-InScopeAppsCsv` once the certification scope list exists |
 | 22 | `-MaxActivationHours` to match the agreed standard |
 | 23 | `-ObjectClass user`, `-EnabledOnly`, `-SearchBase` to limit load |
@@ -125,29 +127,29 @@ When a script is pilot-verified, hand it over with:
 
 | Script | Version | Pilot date | Run by | Known-answer checks passed | Tuned parameters | Status |
 |--------|---------|-----------|--------|----------------------------|------------------|--------|
-| 01 MFA coverage | 1.0.1 | | | | | Mock-tested |
-| 02 Privileged access | 1.0.1 | | | | | Mock-tested |
-| 03 Apps and consents | 1.0.1 | | | | | Mock-tested |
-| 04 AD privileged / service accounts | 1.0.1 | | | | | Mock-tested |
-| 05 AD group nesting | 1.0.1 | | | | | Mock-tested |
-| 06 JML timing | 1.0.1 | | | | | Mock-tested |
-| 07 Role mining | 1.0.0 | | | | | Mock-tested |
-| 08 Extension attributes | 1.0.0 | | | | | Mock-tested |
-| 09 Mail and sharing | 1.0.0 | | | | | Mock-tested |
-| 10 Guests | 1.0.0 | | | | | Mock-tested |
-| 11 Azure RBAC | 1.0.0 | | | | | Mock-tested |
-| 12 Stale accounts | 1.0.0 | | | | | Mock-tested |
-| 13 Hybrid sync scope | 1.0.0 | | | | | Mock-tested |
-| 14 IGA reconciliation | 1.0.0 | | | | | Mock-tested |
-| 15 Rule-managed access | 1.0.0 | | | | | Mock-tested |
-| 16 Device posture | 1.0.0 | | | | | Mock-tested |
-| 17 AWS IAM posture | 1.0.0 | | | | | Mock-tested |
+| 01 MFA coverage | 1.1.0 | | | | | Mock-tested |
+| 02 Privileged access | 1.1.0 | | | | | Mock-tested |
+| 03 Apps and consents | 1.1.0 | | | | | Mock-tested |
+| 04 AD privileged / service accounts | 1.1.0 | | | | | Mock-tested |
+| 05 AD group nesting | 1.1.0 | | | | | Mock-tested |
+| 06 JML timing | 1.1.0 | | | | | Mock-tested |
+| 07 Role mining | 1.1.0 | | | | | Mock-tested |
+| 08 Extension attributes | 1.1.0 | | | | | Mock-tested |
+| 09 Mail and sharing | 1.1.0 | | | | | Mock-tested |
+| 10 Guests | 1.1.0 | | | | | Mock-tested |
+| 11 Azure RBAC | 1.1.0 | | | | | Mock-tested |
+| 12 Stale accounts | 1.1.0 | | | | | Mock-tested |
+| 13 Hybrid sync scope | 1.1.0 | | | | | Mock-tested |
+| 14 IGA reconciliation | 1.1.0 | | | | | Mock-tested |
+| 15 Rule-managed access | 1.1.0 | | | | | Mock-tested |
+| 16 Device posture | 1.1.0 | | | | | Mock-tested |
+| 17 AWS IAM posture | 1.1.0 | | | | | Mock-tested |
 | 18 AD delegation | 1.1.0 | | | | | Mock-tested |
-| 19 DC auth protocols | 1.0.0 | | | | | Mock-tested |
-| 20 Governance coverage | 1.0.0 | | | | | Mock-tested |
-| 21 Identity risk | 1.0.0 | | | | | Mock-tested |
-| 22 PIM role settings | 1.0.0 | | | | | Mock-tested |
-| 23 AD attribute population | 1.1.0 | | | | | Mock-tested |
-| 24 CA report-only impact | 1.0.0 | | | | | Mock-tested |
-| 25 Purview classification and DLP | 1.0.0 | | | | | Mock-tested |
-| 26 PAM vault coverage | 1.0.0 | | | | | Mock-tested |
+| 19 DC auth protocols | 1.1.0 | | | | | Mock-tested |
+| 20 Governance coverage | 1.1.0 | | | | | Mock-tested |
+| 21 Identity risk | 1.1.0 | | | | | Mock-tested |
+| 22 PIM role settings | 1.1.0 | | | | | Mock-tested |
+| 23 AD attribute population | 1.2.0 | | | | | Mock-tested |
+| 24 CA report-only impact | 1.1.0 | | | | | Mock-tested |
+| 25 Purview classification and DLP | 1.1.0 | | | | | Mock-tested |
+| 26 PAM vault coverage | 1.1.0 | | | | | Mock-tested |

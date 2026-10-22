@@ -508,26 +508,26 @@ try {
     function Add-Metric { param($Metric, $Value, $Note = '') $summary.Add([pscustomobject][ordered]@{ Metric = $Metric; Value = $Value; Note = $Note }) }
     $custom = @($rows | Where-Object TrusteeCategory -eq 'Custom')
     Add-Metric 'Directory targets reviewed' ($targets.Count)
-    Add-Metric 'GPOs reviewed' $gpoCount $(if ($tier0GpoGuids.Count) { "$($tier0GpoGuids.Count) linked to the domain root or DC OU (Tier 0)" } else { '' })
-    Add-Metric 'Individual accounts reviewed' $objectCount $objectScanNote
+    Add-Metric -Metric 'GPOs reviewed' -Value $gpoCount -Note $(if ($tier0GpoGuids.Count) { "$($tier0GpoGuids.Count) linked to the domain root or DC OU (Tier 0)" } else { '' })
+    Add-Metric -Metric 'Individual accounts reviewed' -Value $objectCount -Note $objectScanNote
     Add-Metric 'Objects that could not be read' $unreadable
     Add-Metric 'Delegation rows' $rows.Count
     foreach ($s in 'Critical', 'High', 'Medium', 'Low') { Add-Metric "Severity: $s" @($rows | Where-Object Severity -eq $s).Count }
-    Add-Metric 'Rows held by custom trustees' $custom.Count 'Excludes Exchange, Entra Connect and builtin operator rows'
-    Add-Metric 'Rows held by product defaults' @($rows | Where-Object { $_.TrusteeCategory -like 'Exchange*' -or $_.TrusteeCategory -like 'Entra Connect*' }).Count 'Exchange groups and the Entra Connect sync account'
-    Add-Metric 'Non-default trustees with DCSync' @($rows | Where-Object Right -eq 'DCSync' | Select-Object -ExpandProperty TrusteeSid -Unique).Count 'Can read every password hash in the domain (expected only for the Entra Connect sync account)'
+    Add-Metric -Metric 'Rows held by custom trustees' -Value $custom.Count -Note 'Excludes Exchange, Entra Connect and builtin operator rows'
+    Add-Metric -Metric 'Rows held by product defaults' -Value @($rows | Where-Object { $_.TrusteeCategory -like 'Exchange*' -or $_.TrusteeCategory -like 'Entra Connect*' }).Count -Note 'Exchange groups and the Entra Connect sync account'
+    Add-Metric -Metric 'Non-default trustees with DCSync' -Value @($rows | Where-Object Right -eq 'DCSync' | Select-Object -ExpandProperty TrusteeSid -Unique).Count -Note 'Can read every password hash in the domain (expected only for the Entra Connect sync account)'
     Add-Metric 'Non-default trustees with rights on Tier 0 objects' @($rows | Where-Object Tier -eq 'Tier0' | Select-Object -ExpandProperty TrusteeSid -Unique).Count
     Add-Metric 'Trustees that can edit a GPO' @($rows | Where-Object { $_.TargetKind -like 'GPO*' } | Select-Object -ExpandProperty TrusteeSid -Unique).Count
-    Add-Metric 'Rights granted on individual accounts' @($rows | Where-Object { $_.TargetKind -like 'Account:*' -or $_.TargetKind -like 'Group:*' -or $_.TargetKind -like 'Computer:*' }).Count 'Explicit permissions on single objects (excluding copies of AdminSDHolder)'
-    Add-Metric 'Rights granted directly to user accounts' @($rows | Where-Object TrusteeType -eq 'User').Count 'Good practice is to grant to groups'
+    Add-Metric -Metric 'Rights granted on individual accounts' -Value @($rows | Where-Object { $_.TargetKind -like 'Account:*' -or $_.TargetKind -like 'Group:*' -or $_.TargetKind -like 'Computer:*' }).Count -Note 'Explicit permissions on single objects (excluding copies of AdminSDHolder)'
+    Add-Metric -Metric 'Rights granted directly to user accounts' -Value @($rows | Where-Object TrusteeType -eq 'User').Count -Note 'Good practice is to grant to groups'
     Add-Metric 'Trustees able to reset passwords in OUs' @($rows | Where-Object { $_.Tier -eq 'OU' -and $_.Right -in @('ResetPassword', 'FullControl', 'AllExtendedRights') } | Select-Object -ExpandProperty TrusteeSid -Unique).Count
     Add-Metric 'Trustees able to read LAPS passwords' @($rows | Where-Object Right -eq 'ReadLAPSPassword' | Select-Object -ExpandProperty TrusteeSid -Unique).Count
     Add-Metric 'Objects with a non-default owner' $ownerRows.Count
-    Add-Metric 'Rows held by builtin operator groups' @($rows | Where-Object TrusteeIsBuiltinOperator).Count 'Account/Server/Backup Operators should normally be empty'
-    Add-Metric 'Unresolved trustees (deleted accounts)' @($rows | Where-Object { $_.Trustee -like '*(unresolved)' } | Select-Object -ExpandProperty TrusteeSid -Unique).Count 'Orphaned ACEs - safe clean-up'
+    Add-Metric -Metric 'Rows held by builtin operator groups' -Value @($rows | Where-Object TrusteeIsBuiltinOperator).Count -Note 'Account/Server/Backup Operators should normally be empty'
+    Add-Metric -Metric 'Unresolved trustees (deleted accounts)' -Value @($rows | Where-Object { $_.Trustee -like '*(unresolved)' } | Select-Object -ExpandProperty TrusteeSid -Unique).Count -Note 'Orphaned ACEs - safe clean-up'
     if (-not $SkipMemberExpansion) {
-        Add-Metric 'User accounts holding delegated rights' $effective.Count 'Directly or through nested groups'
-        Add-Metric 'Regular (non-admin-named) enabled accounts with High or Critical rights' @($effective | Where-Object { $_.Flags -match 'RegularAccountWithElevatedRights' }).Count ("Admin naming used: {0}" -f ($AdminNamePatterns -join ', '))
+        Add-Metric -Metric 'User accounts holding delegated rights' -Value $effective.Count -Note 'Directly or through nested groups'
+        Add-Metric -Metric 'Regular (non-admin-named) enabled accounts with High or Critical rights' -Value @($effective | Where-Object { $_.Flags -match 'RegularAccountWithElevatedRights' }).Count -Note ("Admin naming used: {0}" -f ($AdminNamePatterns -join ', '))
         Add-Metric 'User accounts holding Tier 0 rights' @($effective | Where-Object HoldsTier0Rights).Count
         Add-Metric 'Enabled holders with no logon in 90 days' @($effective | Where-Object { $_.Flags -match 'NoLogon90d' }).Count
     }
