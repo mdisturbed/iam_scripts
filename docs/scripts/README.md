@@ -21,7 +21,7 @@ One page per script: what it collects, parameters, output files, permissions, pi
 | 15 | [Rule-managed access](15-rule-managed-access.md) | Are applied roles, HR-expected roles and actual group membership in step? | AD + role files | 1.0.0 |
 | 16 | [Device posture](16-device-posture.md) | Are devices joined, managed and compliant, and does Conditional Access rely on it? | Entra + Intune | 1.0.0 |
 | 17 | [AWS IAM posture](17-aws-iam-posture.md) | Which AWS users, keys, roles, trusts and permission sets exist, and which are risky? | AWS | 1.0.0 |
-| 18 | [AD delegation](18-ad-delegation.md) | Who has dangerous rights through AD permissions (ACLs), not group membership? | AD | 1.0.0 |
+| 18 | [AD delegation](18-ad-delegation.md) | Who has dangerous rights through AD permissions, and which real accounts end up holding them? | AD | 1.1.0 |
 | 19 | [DC authentication protocols](19-dc-authentication-protocols.md) | Who still uses NTLM (v1 especially) or RC4/DES Kerberos? | DC event logs | 1.0.0 |
 | 20 | [Governance coverage](20-governance-coverage.md) | What share of apps, groups and roles is actually covered by access reviews? | Entra ID Governance | 1.0.0 |
 | 21 | [Identity risk](21-identity-risk.md) | Who is at risk right now, and does Conditional Access act on risk? | Entra ID Protection | 1.0.0 |

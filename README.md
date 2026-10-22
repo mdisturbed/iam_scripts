@@ -43,7 +43,7 @@ Each links to its page: what it collects, parameters, output files, permissions,
 | 15 | [Rule-managed access](docs/scripts/15-rule-managed-access.md) | Are applied roles, HR-expected roles and actual group membership in step? | AD + role files |
 | 16 | [Device posture](docs/scripts/16-device-posture.md) | Are devices joined, managed and compliant, and does Conditional Access rely on it? | Entra + Intune |
 | 17 | [AWS IAM posture](docs/scripts/17-aws-iam-posture.md) | Which AWS users, keys, roles, trusts and permission sets exist, and which are risky? | AWS |
-| 18 | [AD delegation](docs/scripts/18-ad-delegation.md) | Who has dangerous rights through AD permissions (ACLs), not group membership? | AD |
+| 18 | [AD delegation](docs/scripts/18-ad-delegation.md) | Who has dangerous rights through AD permissions, and which real accounts end up holding them? | AD |
 | 19 | [DC authentication protocols](docs/scripts/19-dc-authentication-protocols.md) | Who still uses NTLM (v1 especially) or RC4/DES Kerberos? | DC event logs |
 | 20 | [Governance coverage](docs/scripts/20-governance-coverage.md) | What share of apps, groups and roles is actually covered by access reviews? | Entra ID Governance |
 | 21 | [Identity risk](docs/scripts/21-identity-risk.md) | Who is at risk right now, and does Conditional Access act on risk? | Entra ID Protection |

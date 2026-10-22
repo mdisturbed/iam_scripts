@@ -91,6 +91,7 @@ Expect to adjust these on the first run and record the values used. They're writ
 | 08 | `-AdditionalAttributes`, `-SampleValueCount 0` if values are sensitive |
 | 12, 13 | `-AnchorAttribute` if Entra Connect uses `mS-DS-ConsistencyGuid` |
 | 17 | `-Region`, `-IdentityCenterRegion`, `-AssumeRoleName` |
+| 18 | `-AdminNamePatterns` to the admin naming standard, `-AdditionalPrivilegedGroups` |
 | 19 | `-Hours` to fit how much Security log the DCs hold |
 | 20 | `-InScopeAppsCsv` once the certification scope list exists |
 | 22 | `-MaxActivationHours` to match the agreed standard |
@@ -141,7 +142,7 @@ When a script is pilot-verified, hand it over with:
 | 15 Rule-managed access | 1.0.0 | | | | | Mock-tested |
 | 16 Device posture | 1.0.0 | | | | | Mock-tested |
 | 17 AWS IAM posture | 1.0.0 | | | | | Mock-tested |
-| 18 AD delegation | 1.0.0 | | | | | Mock-tested |
+| 18 AD delegation | 1.1.0 | | | | | Mock-tested |
 | 19 DC auth protocols | 1.0.0 | | | | | Mock-tested |
 | 20 Governance coverage | 1.0.0 | | | | | Mock-tested |
 | 21 Identity risk | 1.0.0 | | | | | Mock-tested |

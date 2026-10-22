@@ -59,7 +59,7 @@ The CSVs contain identity data (names, UPNs, sign-in activity, group membership,
 - [15 Rule-managed access](scripts/15-rule-managed-access.md#output): `role-definition-check.csv`, `user-reconciliation.csv`, `drift-detail.csv`
 - [16 Device posture](scripts/16-device-posture.md#output): `entra-devices.csv`, `intune-devices.csv`, `compliance-policies.csv`, `ca-device-requirements.csv`
 - [17 AWS IAM posture](scripts/17-aws-iam-posture.md#output): `aws-accounts.csv`, `aws-iam-users.csv`, `aws-access-keys.csv`, `aws-iam-roles.csv`, `aws-saml-providers.csv`, `aws-access-analyzer-findings.csv`, `aws-identity-center-permission-sets.csv`, `aws-identity-center-assignments.csv`
-- [18 AD delegation](scripts/18-ad-delegation.md#output): `ad-delegations.csv`, `ad-nondefault-owners.csv`, `ad-delegation-by-trustee.csv`
+- [18 AD delegation](scripts/18-ad-delegation.md#output): `ad-delegations.csv`, `ad-nondefault-owners.csv`, `ad-delegation-by-trustee.csv`, `ad-delegation-effective-users.csv`
 - [19 DC authentication protocols](scripts/19-dc-authentication-protocols.md#output): `dc-read-status.csv`, `ntlm-logons.csv`, `ntlm-validations.csv`, `kerberos-weak-encryption.csv`
 - [20 Governance coverage](scripts/20-governance-coverage.md#output): `access-review-definitions.csv`, `access-review-latest-decisions.csv`, `review-coverage.csv`, `access-packages.csv`
 - [21 Identity risk](scripts/21-identity-risk.md#output): `risky-users.csv`, `risk-detections.csv`, `risk-detections-by-type.csv`, `risky-service-principals.csv`, `ca-risk-policies.csv`

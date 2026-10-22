@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.7.0 - 2026-10-22
+
+### Changed
+- `18-Get-ADDelegation.ps1` 1.1.0: now also reviews GPO permissions (GPOs linked to the domain root or DC OU are Tier 0) and explicit permissions on individual accounts (`-ObjectAclScope`: admin-like accounts by default, or `All`); rights copied from AdminSDHolder onto protected accounts are not repeated. Group trustees are expanded through nested groups to the user accounts that actually hold each right (`ad-delegation-effective-users.csv`), with regular (non-admin-named) accounts holding High or Critical rights flagged. Trustees are labelled Exchange (product default), Entra Connect (sync account), Builtin operator or Custom. New parameters: `-ObjectAclScope`, `-AdminNamePatterns`, `-AdditionalPrivilegedGroups`, `-SkipGPOs`, `-SkipMemberExpansion`. A failed account search no longer stops the run.
+
 ## 1.6.0 - 2026-10-21
 
 Closes the gaps found when aligning the scripts to the engagement scope (Conditional Access staging, Purview classification evidence, PAM coverage).
