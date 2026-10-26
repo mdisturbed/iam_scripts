@@ -1,0 +1,5 @@
+TestId,CaseType,Description,UserPrincipalName,App,PolicyId,PolicyName,ExpectedPolicyResult,ExpectedSignIn,NotBeforeUtc,InPilotExpected
+T01,Expected,Pilot user signs in to App1 and is prompted for MFA,user1@contoso.com,App1,00000000-0000-0000-0000-000000000001,CA001 Require MFA pilot,success,Success,2026-10-20T09:00:00Z,True
+T02,Adverse,User outside the pilot signs in to App1: policy must not apply,user2@contoso.com,App1,00000000-0000-0000-0000-000000000001,CA001 Require MFA pilot,notApplied,Success,2026-10-20T09:00:00Z,False
+T03,Adverse,Pilot user tries a legacy mail client: sign-in must be blocked,user1@contoso.com,Exchange ActiveSync,00000000-0000-0000-0000-000000000002,CA002 Block legacy auth,failure,Failure,2026-10-20T09:00:00Z,True
+T04,Expected,After rollback (pilot group removed from the policy): pilot user signs in to App1 and the policy does not apply,user1@contoso.com,App1,00000000-0000-0000-0000-000000000001,CA001 Require MFA pilot,notApplied,Success,2026-10-24T15:00:00Z,True

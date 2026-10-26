@@ -112,6 +112,13 @@ Every script with typical parameters. Point `-OutputRoot` at the approved eviden
 .\scripts\25-Get-PurviewClassification.ps1    -IncludeContentExplorer -OutputRoot D:\Evidence
 .\scripts\26-Compare-PamVaultCoverage.ps1     -PamExportCsv .\pam-accounts.csv -OutputRoot D:\Evidence
 
+# 7b. Identity population, Conditional Access change evidence, access-review evidence
+.\scripts\27-Get-IdentityPopulation.ps1    -Server dc01.contoso.local -HrCsvPath .\hr-export.csv -ExclusionsCsv .\population-exclusions.csv -BreakGlassUpns bg1@contoso.com -OutputRoot D:\Evidence
+.\scripts\28-Export-CaPolicySnapshot.ps1   -OutputRoot D:\Evidence                                         # before a CA change
+.\scripts\28-Export-CaPolicySnapshot.ps1   -BaselineRunFolder D:\Evidence\28-CaPolicySnapshot\<run> -OutputRoot D:\Evidence   # after change or rollback
+.\scripts\29-Test-PilotOutcome.ps1         -TestCaseCsv .\pilot-test-cases.csv -PilotGroupId 00000000-0000-0000-0000-000000000001 -CheckScopeLeak -OutputRoot D:\Evidence
+.\scripts\30-Get-AccessReviewEvidence.ps1  -SinceDays 180 -OutputRoot D:\Evidence
+
 # 7. AWS (credential profile, or a read-only role in every account)
 .\scripts\17-Get-AwsIamPosture.ps1 -ProfileName audit -AllOrganizationAccounts -AssumeRoleName IAMDiscoveryReadOnly -IncludeIdentityCenter -OutputRoot D:\Evidence
 
@@ -154,9 +161,13 @@ Checks what this machine can run, lets you pick, runs the picks in order, and su
 - Each script still writes its own timestamped run folder. The summary shows **Completed**, **Partial** (some datasets Blocked or EvidenceUnavailable), **Failed** or **Skipped**, and the run folder.
 - Set `-Server` once per session with `$PSDefaultParameterValues['*-AD*:Server'] = 'dc01.contoso.local'` and the launcher picks it up.
 
+### Evidence tools
+
+`Compare-RunFolders.ps1` (before / after), `Get-KpiSummary.ps1` (KPIs over the script 27 denominators) and `New-EvidencePackage.ps1` (intake log, hash re-check, per-deliverable status) read run folders and write their own run folder. See [Evidence tools](evidence-tools.md).
+
 ### New-DiscoveryReport.ps1
 
-Builds one self-contained HTML page (`<OutputRoot>\discovery-report.html`) from the latest run of each script: headline tiles, a coverage table for all 22 scripts with pilot status from the [pilot runbook](pilot-runbook.md#sign-off), every summary metric with the change since the previous run, and every dataset's status. Open it in any browser; it adapts to dark mode and prints cleanly.
+Builds one self-contained HTML page (`<OutputRoot>\discovery-report.html`) from the latest run of each script: headline tiles, a coverage table for every script in the catalog with pilot status from the [pilot runbook](pilot-runbook.md#sign-off), every summary metric with the change since the previous run, and every dataset's status. Open it in any browser; it adapts to dark mode and prints cleanly.
 
 ```powershell
 .\tools\New-DiscoveryReport.ps1 -OutputRoot D:\Evidence

@@ -38,5 +38,9 @@
         @{ Number = '24'; Title = 'CA report-only impact';                Area = 'Entra';      Needs = @('Graph') }
         @{ Number = '25'; Title = 'Purview classification and DLP';       Area = 'Data protection'; Needs = @('Exchange') }
         @{ Number = '26'; Title = 'PAM vault coverage';                   Area = 'Privileged access'; Needs = @('InputFile'); Note = 'Run after 02, 04, 11, 17 and 18 into the same evidence folder.' }
+        @{ Number = '27'; Title = 'Identity population';                  Area = 'Hybrid';     Needs = @('AD', 'Graph');       Optional = @('InputFile'); Note = 'The denominators for every KPI. Pass the HR export and approved exclusions when you have them.' }
+        @{ Number = '28'; Title = 'CA policy snapshot';                   Area = 'Entra';      Needs = @('Graph'); Note = 'Take one before every Conditional Access change; pass it as -BaselineRunFolder afterwards.' }
+        @{ Number = '29'; Title = 'Pilot outcome';                        Area = 'Entra';      Needs = @('Graph', 'InputFile'); Note = 'Needs a test-case file. Run after the test users have signed in.' }
+        @{ Number = '30'; Title = 'Access review evidence';               Area = 'Entra';      Needs = @('Graph') }
     )
 }

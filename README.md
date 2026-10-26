@@ -52,6 +52,10 @@ Each links to its page: what it collects, parameters, output files, permissions,
 | 24 | [CA report-only impact](docs/scripts/24-ca-reportonly-impact.md) | What does each Conditional Access policy do to real sign-ins, who would a report-only policy block or challenge, and which sign-ins does no enforced policy cover? | Entra sign-in logs |
 | 25 | [Purview classification and DLP](docs/scripts/25-purview-classification.md) | What can classify and protect regulated data, what is switched on, who is excluded, who can see or bypass it, and how much tagged content exists? | Microsoft Purview |
 | 26 | [PAM vault coverage](docs/scripts/26-pam-vault-coverage.md) | Which privileged, service and delegated accounts are managed in the PAM vault, which are not, and which vault entries are stale? | PAM export + 02/04/11/17/18 |
+| 27 | [Identity population](docs/scripts/27-identity-population.md) | Who exactly is in scope, how many of each kind of identity are there, and who was excluded and why? The denominators for every KPI | AD + Entra (+ HR file) |
+| 28 | [CA policy snapshot](docs/scripts/28-ca-policy-snapshot.md) | What exactly is the Conditional Access configuration right now, and what changed since the last snapshot? The baseline and rollback proof for a change | Entra |
+| 29 | [Pilot outcome](docs/scripts/29-pilot-outcome.md) | Did each pilot test case, expected and adverse, give the result it should, and which sign-in proves it? | Entra sign-in logs + test-case file |
+| 30 | [Access review evidence](docs/scripts/30-access-review-evidence.md) | For each access review that ran, who reviewed what, what did they decide and why, and were removals applied? | Entra ID Governance |
 
 The scripts gather facts. They do not score maturity or recommend fixes; that interpretation belongs in the analysis that uses the evidence.
 
@@ -119,12 +123,28 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 | Current lifecycle and governance baseline | 06, 14 |
 | Groups and RBAC design | 05, 07, 08, 23 |
 | After rule-based access goes live | 15 (scheduled), 06 and 12 (rerun) |
+| KPI denominators | 27 |
+| Conditional Access change: baseline, pilot, rollback | 28, 24, 29, then 28 with `-BaselineRunFolder` |
+| Access-review evidence | 20, 30 |
 
 1. Run `Test-ReadOnly.ps1` and share the result with whoever approves the run.
 2. Pilot each script yourself using the [pilot runbook](docs/pilot-runbook.md).
 3. Build the HTML report with `tools/New-DiscoveryReport.ps1` for the status update: headline metrics, change since the previous run, and every `Blocked` or `EvidenceUnavailable` dataset.
 4. Log each finding in Jira with the [finding template](docs/jira-finding-template.md); `tools/New-FindingEvidence.ps1` pre-fills the Evidence and Closure sections from the run folder.
-5. After remediation, rerun with the same parameters and compare summaries; that rerun is the finding's closure evidence.
+5. After remediation, rerun with the same parameters and compare the two run folders with `tools/Compare-RunFolders.ps1`; that rerun and the comparison are the finding's closure evidence.
+
+### Running a staged identity programme
+
+For work that moves through gates (baseline, pilot, staged change, operational handover, final evidence), three tools turn run folders into gate evidence. See [Evidence tools](docs/evidence-tools.md).
+
+| Need | Use |
+|------|-----|
+| One agreed population to divide by | 27, with the [population exclusions](examples/population-exclusions.example.csv) the approver signs |
+| Pilot passes, rollback proven | [Pilot test cases](examples/pilot-test-cases.example.csv) → 29; 28 before the change and again with `-BaselineRunFolder` after rollback |
+| Before / after evidence for an approved change | `tools/Compare-RunFolders.ps1` |
+| KPIs with validated denominators | `tools/Get-KpiSummary.ps1` with a [KPI definition file](examples/kpi-definitions.example.psd1) |
+| Evidence intake log and per-deliverable status | `tools/New-EvidencePackage.ps1` with a [deliverable map](examples/deliverable-map.example.psd1) |
+| Exceptions, status, ownership, runbooks | [Registers and templates](docs/templates/README.md) |
 
 > **Contributing?** Read [CONTRIBUTING.md](CONTRIBUTING.md) and run `.\tools\guardrail\Install-Guardrail.ps1` once after cloning. See [Guardrail](docs/guardrail.md).
 
@@ -137,6 +157,8 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 | [Permissions](docs/permissions.md) | Roles, scopes, licences and modules per script; app-only setup |
 | [Output and evidence](docs/outputs.md) | Run folder, manifest, dataset statuses, handling the files |
 | [Pilot runbook](docs/pilot-runbook.md) | Moving a script from mock-tested to pilot-verified before handover |
+| [Evidence tools](docs/evidence-tools.md) | Before / after comparison, KPIs with validated denominators, evidence intake log and per-deliverable package |
+| [Registers and templates](docs/templates/README.md) | Pilot test cases, exception register, status register, ownership matrix, runbook template |
 | [Jira finding template](docs/jira-finding-template.md) | Logging findings with evidence and closure criteria |
 | [Troubleshooting](docs/troubleshooting.md) | Symptoms, causes and fixes |
 | [Design and testing](docs/design-and-testing.md) | Design choices and how the scripts were tested |
@@ -154,21 +176,25 @@ iam_scripts/
 ├── .gitignore                    blocks evidence, keys and data exports from being committed
 ├── .githooks/                    pre-commit and commit-msg guardrail hooks
 ├── .github/workflows/            guardrail CI on every push (backstop for the hooks)
-├── scripts/                      the twenty-six discovery scripts (self-contained, run independently)
+├── scripts/                      the thirty discovery scripts (self-contained, run independently)
 ├── tools/
 │   ├── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
 │   ├── Start-Discovery.ps1       launcher: readiness check, pick list, runs scripts, run summary
 │   ├── New-DiscoveryReport.ps1   one-page HTML report from the evidence folder (counts only)
 │   ├── discovery-catalog.psd1    script list and what each needs, shared by the two above
 │   ├── New-FindingEvidence.ps1   pre-fills a Jira finding's Scope, Evidence and Closure from a run folder
+│   ├── Compare-RunFolders.ps1    before / after evidence: two runs of the same script, row and metric changes
+│   ├── Get-KpiSummary.ps1        KPIs from the latest runs, divided by the script 27 population
+│   ├── New-EvidencePackage.ps1   evidence intake log, hash re-check and per-deliverable status
 │   └── guardrail/                blocks identifying info and secrets from being committed (docs/guardrail.md)
-├── examples/                     placeholder input templates for scripts 06, 14, 15 and 26
-│   ├── hr.example.csv
-│   ├── iga-accounts.example.csv
-│   ├── iga-assignments.example.csv
-│   ├── pam-accounts.example.csv
-│   ├── role-definitions.example.csv
-│   └── rule-map.example.csv
+├── examples/                     placeholder inputs and registers (never commit a filled copy)
+│   ├── hr.example.csv, iga-*.example.csv, role-definitions / rule-map   inputs for 06, 14, 15
+│   ├── pam-accounts.example.csv               input for 26
+│   ├── population-exclusions.example.csv      input for 27
+│   ├── pilot-test-cases.example.csv           input for 29
+│   ├── kpi-definitions.example.psd1           input for Get-KpiSummary
+│   ├── deliverable-map.example.psd1           input for New-EvidencePackage
+│   └── exception / status register, ownership matrix
 └── docs/
     ├── getting-started.md        modules, access, sign-in, common parameters, locked-down hosts
     ├── scripts/                  one page per script: parameters, outputs, permissions, pilot check
@@ -176,6 +202,8 @@ iam_scripts/
     ├── outputs.md                run folder, dataset statuses, handling the output
     ├── pilot-runbook.md          how to verify each script in the real environment before handover
     ├── jira-finding-template.md  how to log each finding in Jira: fields, description template, severity guide
+    ├── evidence-tools.md         before / after, KPIs, evidence package
+    ├── templates/                registers and runbook template
     ├── troubleshooting.md        symptoms, causes and fixes
     ├── guardrail.md              no identifying info in the repo: rules, placeholders, setup
     └── design-and-testing.md     why the scripts are built this way, and how they were tested

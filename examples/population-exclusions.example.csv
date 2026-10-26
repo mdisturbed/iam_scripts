@@ -1,0 +1,4 @@
+Identity,Reason,ApprovedBy,ApprovedOnUtc,ExpiresUtc
+user1@contoso.com,Contractor covered by the supplier's own controls; not part of the workforce KPIs,Role2,2026-11-02T00:00:00Z,2027-05-02T00:00:00Z
+CONTOSO\shared-frontdesk,Shared reception mailbox account with no person behind it,Role2,2026-11-02T00:00:00Z,2027-11-02T00:00:00Z
+kiosk01,Kiosk sign-in account for App1,Role2,2026-11-02T00:00:00Z,
