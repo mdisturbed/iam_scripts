@@ -79,7 +79,9 @@ Pick one or two facts per script that you can confirm independently in the porta
 | 25 Purview classification | DLP policy count and modes match **Purview > Data loss prevention > Policies** |
 | 26 PAM vault coverage | One known vaulted account shows `Vaulted = True` with the right safe; one known unvaulted shows `NotVaulted` |
 | 27 Identity population | `Entra users (all)` matches the user count in Entra > Users; `AD users enabled` matches `(Get-ADUser -Filter 'Enabled -eq $true').Count`; one known admin account is `AdminAccount`; every row in `population-exclusions.csv` has a reason |
-@@28@@| 30 Access review evidence | One completed review's decision counts match **Identity Governance > Access reviews > (review) > Results**; one known deny shows its apply result |
+| 28 CA policy snapshot | `ca-policies.csv` state counts match the Conditional Access policy list in the Entra portal; a snapshot taken twice with no change in between shows every policy `Unchanged` |
+| 29 Pilot outcome | One test case's evidence sign-in (`CorrelationId`) opens in the Entra sign-in log and its Conditional Access tab shows the same result |
+| 30 Access review evidence | One completed review's decision counts match **Identity Governance > Access reviews > (review) > Results**; one known deny shows its apply result |
 
 ## Tuning on first run
 
@@ -105,7 +107,9 @@ Expect to adjust these on the first run and record the values used. They're writ
 | 25 | `-ContentExplorerSits` to the organization's list |
 | 26 | `-Pam*Column` mappings to the export's headers |
 | 27 | `-AdminNamePatterns`, `-ServiceNamePatterns`, `-TestNamePatterns`, `-ResourceNamePatterns`, HR column names, `-BreakGlassUpns`; agree the exclusions file with the approver |
-@@28@@| 30 | `-SinceDays`, `-DefinitionNameLike` to the reviews in scope |
+| 28 | `-ResolveNames $false` if name lookups are slow or not permitted |
+| 29 | `-LookbackHours`, `NotBeforeUtc` per case so only sign-ins after the change count |
+| 30 | `-SinceDays`, `-DefinitionNameLike` to the reviews in scope |
 | 14 | Column names, `-SystemName`, status value lists |
 
 ## Reporting a problem

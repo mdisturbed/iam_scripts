@@ -289,11 +289,6 @@ function ConvertTo-StableDateText {
     return $dto.UtcDateTime.ToString('yyyy-MM-ddTHH:mm:ss.FFFFFFFZ', $script:Invariant)
 }
 
-function Test-ScalarValue {
-    param($Value)
-    return ($null -eq $Value -or $Value -is [string] -or $Value -is [bool] -or $Value -is [datetime] -or $Value -is [datetimeoffset] -or $Value -is [ValueType])
-}
-
 function Test-EmptyValue {
     # True for $null, an empty list or an empty object (left out of the canonical form).
     param($Value)

@@ -114,7 +114,10 @@ Every script with typical parameters. Point `-OutputRoot` at the approved eviden
 
 # 7b. Identity population, Conditional Access change evidence, access-review evidence
 .\scripts\27-Get-IdentityPopulation.ps1    -Server dc01.contoso.local -HrCsvPath .\hr-export.csv -ExclusionsCsv .\population-exclusions.csv -BreakGlassUpns bg1@contoso.com -OutputRoot D:\Evidence
-@@28@@.\scripts\30-Get-AccessReviewEvidence.ps1  -SinceDays 180 -OutputRoot D:\Evidence
+.\scripts\28-Export-CaPolicySnapshot.ps1   -OutputRoot D:\Evidence                                         # before a CA change
+.\scripts\28-Export-CaPolicySnapshot.ps1   -BaselineRunFolder D:\Evidence\28-CaPolicySnapshot\<run> -OutputRoot D:\Evidence   # after change or rollback
+.\scripts\29-Test-PilotOutcome.ps1         -TestCaseCsv .\pilot-test-cases.csv -PilotGroupId 00000000-0000-0000-0000-000000000001 -CheckScopeLeak -OutputRoot D:\Evidence
+.\scripts\30-Get-AccessReviewEvidence.ps1  -SinceDays 180 -OutputRoot D:\Evidence
 
 # 7. AWS (credential profile, or a read-only role in every account)
 .\scripts\17-Get-AwsIamPosture.ps1 -ProfileName audit -AllOrganizationAccounts -AssumeRoleName IAMDiscoveryReadOnly -IncludeIdentityCenter -OutputRoot D:\Evidence

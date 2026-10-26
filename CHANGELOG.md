@@ -2,6 +2,24 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.9.0 - 2026-10-26
+
+Gate evidence release. Closes the gaps found when the scripts were mapped to the deliverables and success criteria of a staged identity programme (baseline, pilot, staged change, operational readiness, final evidence). Everything stays read-only.
+
+### Added
+- `27-Get-IdentityPopulation.ps1` (1.0.0): one agreed in-scope identity population from AD, Entra and an optional HR export. Every identity is classified (human workforce, admin, service, break-glass, guest, external member, resource, test, unclassified) with the rule that matched. Writes `population-denominators.csv`, the standard denominators every KPI divides by, with written definitions an approver can sign. Approved exclusions come from a file with approver and expiry; expired ones are not applied. Also writes the HR vs AD vs Entra reconciliation.
+- `28-Export-CaPolicySnapshot.ps1` (1.0.0): Conditional Access policies, named locations, authentication strengths, the authentication methods policy and security defaults as raw JSON plus flattened CSV, with a canonical per-policy hash. With `-BaselineRunFolder`, per-object drift with the changed paths. The baseline's own hashes are checked first. This is the pre-change baseline and the rollback proof (after a rollback every policy shows `Unchanged`).
+- `29-Test-PilotOutcome.ps1` (1.0.0): marks each expected and adverse pilot test case Pass, Fail, NoEvidence or Blocked from the sign-in logs, citing the sign-in (correlation ID) used as evidence. It can also check pilot-group membership and list users outside the pilot that a pilot policy enforced on (scope leak).
+- `30-Get-AccessReviewEvidence.ps1` (1.0.0): one row per access-review decision (reviewer, decision, justification, recommendation, apply result, stage) for reviews in a window, and the exceptions to follow up: not reviewed, deny not applied, self-review, approved without a required justification, decided against recommendation, privileged left unreviewed, no reviewers contacted, overdue.
+- `tools/Compare-RunFolders.ps1`: before/after evidence from two runs of the same script. Gives row-level adds, removes and changes, plus metric deltas. Both folders are hash-checked first.
+- `tools/Get-KpiSummary.ps1`: KPIs from the latest runs, divided by the script 27 population. Every value carries its source runs and hashes. Nothing is computed from Blocked or EvidenceUnavailable data. Values are marked Partial when the numerator and denominator come from runs far apart.
+- `tools/New-EvidencePackage.ps1`: evidence intake log, re-verification of every dataset hash, a status per deliverable from a deliverable map, `evidence-index.md`, and an optional verified package copy.
+- Examples: `population-exclusions`, `pilot-test-cases`, `kpi-definitions`, `deliverable-map`, exception register, status register, ownership matrix. Docs: `docs/evidence-tools.md`, `docs/templates/` (registers and a runbook template).
+- Catalog entries for 27-30, so the launcher and report show them.
+
+### Notes
+- The new scripts and tools were mock-tested end to end on PowerShell 7.4. PSScriptAnalyzer was not run for this release; run it before handover.
+
 ## 1.8.0 - 2026-10-22
 
 Depth release. Every script was reviewed for places where it stopped at a group, a role or a fixed list instead of resolving to the real accounts, and for places where a failed read was reported as a finding or as "none". Earlier evidence from the scripts listed under Fixed should be rerun.
