@@ -32,6 +32,9 @@ Everything here is read-only. Ask for the narrowest option that works and, where
 | 24 CA report-only impact | Global Reader or Security Reader | Policy.Read.All, AuditLog.Read.All, RoleManagement.Read.Directory, Directory.Read.All, PrivilegedEligibilitySchedule.Read.AzureADGroup | | Graph Auth |
 | 25 Purview classification and DLP | Global Reader | | Purview Global Reader role group; Information Protection Readers + Content Explorer List viewer for `-IncludeContentExplorer`; a role group with Activity explorer access for `-IncludeActivityExplorer`; (AIPService module on Windows PowerShell 5.1 for label super users) | ExchangeOnlineManagement |
 | 26 PAM vault coverage | | | PAM account export; earlier runs of 02 / 04 / 11 / 17 / 18 | none |
+| 27 Identity population | Global Reader (or any role that can read users) | User.Read.All | Domain read; HR export and approved exclusions file (both optional) | RSAT AD, Graph Auth |
+@@28@@| 30 Access review evidence | Global Reader | AccessReview.Read.All, Directory.Read.All, RoleManagement.Read.Directory, PrivilegedEligibilitySchedule.Read.AzureADGroup | | Graph Auth |
+| Tools: Compare-RunFolders, Get-KpiSummary, New-EvidencePackage | | | Read access to the evidence folder; write access to their own output folder | none |
 
 Items in brackets apply only when the matching optional switch is used.
 
@@ -51,7 +54,7 @@ All scopes used anywhere in the repository:
 | Scope | Used by |
 |-------|---------|
 | `Directory.Read.All` | 01, 02, 03, 08, 10, 11, 16, 20, 21, 22, 24 |
-| `User.Read.All` | 06, 10, 12, 13 |
+| `User.Read.All` | 06, 10, 12, 13, 27 |
 | `Group.Read.All` | 13, 20 |
 | `GroupMember.Read.All` | 12, 13, 20 |
 | `Application.Read.All` | 03, 08, 20 |
@@ -64,7 +67,7 @@ All scopes used anywhere in the repository:
 | `RoleManagementPolicy.Read.Directory` | 22 |
 | `RoleManagementPolicy.Read.AzureADGroup` | 22 |
 | `RoleManagementAlert.Read.Directory` | 22 |
-| `AccessReview.Read.All` | 20 |
+| `AccessReview.Read.All` | 20, 30 |
 | `EntitlementManagement.Read.All` | 20 |
 | `LifecycleWorkflows.Read.All` | 20 |
 | `IdentityRiskyUser.Read.All` | 21 |
@@ -88,7 +91,7 @@ All scopes used anywhere in the repository:
 |------|-------|-----------|
 | Sign-in logs, `signInActivity`, registration details | Entra ID P1 | Dataset marked `EvidenceUnavailable` / `Blocked`, or activity columns left blank with a note |
 | PIM eligible assignments (Entra roles and Azure resources) | Entra ID P2 / ID Governance | Scripts 02 and 11 continue; eligibility marked `EvidenceUnavailable` |
-| Access reviews, entitlement management (20), PIM settings (22) | Entra ID P2 / ID Governance | Dataset marked `EvidenceUnavailable` / `Blocked` |
+| Access reviews, entitlement management (20, 30), PIM settings (22) | Entra ID P2 / ID Governance | Dataset marked `EvidenceUnavailable` / `Blocked` |
 | Risky users and detections (21) | Entra ID P2 for full detail | Limited data on P1 |
 | Risky service principals (21) | Workload Identities Premium | Dataset marked `EvidenceUnavailable` |
 | Service-principal sign-in activity | Entra ID P1 (Graph beta report) | `LastSignInUtc` left blank |

@@ -69,5 +69,8 @@ The CSVs contain identity data (names, UPNs, sign-in activity, group membership,
 - [24 CA report-only impact](scripts/24-ca-reportonly-impact.md#output): `ca-policy-results.csv`, `ca-reportonly-impact.csv`, `no-enforced-policy-signins.csv`
 - [25 Purview classification and DLP](scripts/25-purview-classification.md#output): `purview-sensitivity-labels.csv`, `purview-label-policies.csv`, `purview-autolabel-policies.csv`, `purview-autolabel-rules.csv`, `purview-dlp-policies.csv`, `purview-dlp-rules.csv`, `policy-exclusions.csv`, `purview-adaptive-scopes.csv`, `purview-sensitive-info-types.csv`, `purview-role-holders.csv`, `purview-ediscovery-admins.csv`, `purview-aip-super-users.csv`, `purview-retention-policies.csv`, `purview-retention-labels.csv`, `purview-content-explorer-counts.csv`, `purview-activity-summary.csv`
 - [26 PAM vault coverage](scripts/26-pam-vault-coverage.md#output): `privileged-vault-coverage.csv`, `pam-entries-unmatched.csv`, `source-runs.csv`
+- [27 Identity population](scripts/27-identity-population.md#output): `population-denominators.csv`, `identity-population.csv`, `population-exclusions.csv`, `population-reconciliation.csv`, `unmatched-exclusions.csv`
+@@28@@- [30 Access review evidence](scripts/30-access-review-evidence.md#output): `review-instances.csv`, `review-decisions.csv`, `review-exceptions.csv`
+- [Evidence tools](evidence-tools.md): Compare-RunFolders `run-diff-summary.csv`, `run-diff-rows.csv`, `metric-diff.csv`, `input-verification.csv`; Get-KpiSummary `kpi-summary.csv`; New-EvidencePackage `evidence-intake-log.csv`, `evidence-datasets.csv`, `deliverable-status.csv`, `evidence-index.md`, `package-manifest.csv`
 
 [← Back to README](../README.md)

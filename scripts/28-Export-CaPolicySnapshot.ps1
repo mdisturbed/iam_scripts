@@ -314,8 +314,8 @@ function Get-SortedKeys {
 function ConvertTo-SortedValue {
     # Rebuilds a Graph object as nested ordered dictionaries with properties in ordinal order and
     # dates as UTC text. -Canonical also: drops null / empty values, sorts lists (list order carries
-    # no meaning in these policies) and leaves out the -Exclude top-level properties (volatile fields).
-    param($Value, [switch]$Canonical, [string[]]$Exclude = @())
+    # no meaning in these policies) and leaves out the -Exclude dot paths (volatile fields).
+    param($Value, [switch]$Canonical, [string[]]$Exclude = @(), [string]$Path = '')
     if ($null -eq $Value) { return $null }
     if ($Value -is [string]) {
         if ($Value -match $script:IsoDatePattern) { return (ConvertTo-StableDateText $Value) }
@@ -338,8 +338,9 @@ function ConvertTo-SortedValue {
         $out = [ordered]@{}
         foreach ($k in (Get-SortedKeys -Keys @($pairs.Keys))) {
             if ($k -in @('@odata.context', '@odata.nextLink', '@odata.count')) { continue }
-            if ($Canonical -and $Exclude -contains $k) { continue }
-            $v = ConvertTo-SortedValue -Value $pairs[$k] -Canonical:$Canonical
+            $childPath = $(if ($Path) { "$Path.$k" } else { $k })
+            if ($Canonical -and $Exclude -contains $childPath) { continue }
+            $v = ConvertTo-SortedValue -Value $pairs[$k] -Canonical:$Canonical -Exclude $Exclude -Path $childPath
             if ($Canonical -and (Test-EmptyValue $v)) { continue }
             $out[$k] = $v
         }
@@ -348,7 +349,7 @@ function ConvertTo-SortedValue {
     if ($Value -is [System.Collections.IEnumerable]) {
         $items = [System.Collections.Generic.List[object]]::new()
         foreach ($i in $Value) {
-            $v = ConvertTo-SortedValue -Value $i -Canonical:$Canonical
+            $v = ConvertTo-SortedValue -Value $i -Canonical:$Canonical -Exclude $Exclude -Path $Path
             if ($Canonical -and (Test-EmptyValue $v)) { continue }
             $items.Add($v)
         }
@@ -500,7 +501,7 @@ function Get-RawMap {
 
 # Fields that change without a configuration change (an edit that is later reverted, or a service update).
 # They are kept in the JSON files but left out of every hash and drift comparison.
-$VolatilePolicy   = @('modifiedDateTime')
+$VolatilePolicy   = @('modifiedDateTime', 'grantControls.authenticationStrength.createdDateTime', 'grantControls.authenticationStrength.modifiedDateTime')
 $VolatileLocation = @('modifiedDateTime')
 $VolatileStrength = @('modifiedDateTime')
 $VolatileMethods  = @('lastModifiedDateTime')
@@ -509,7 +510,7 @@ $ctx = $null
 try {
     Write-RunLog ("{0} v{1} starting. Output: {2}" -f $ScriptName, $ScriptVersion, $script:RunFolder)
     $ctx = Connect-DiscoveryGraph
-    $script:ManifestExtra = [ordered]@{ ResolveNames = $ResolveNames; VolatileFieldsExcludedFromHashes = 'policies/namedLocations/authenticationStrengths: modifiedDateTime; authenticationMethodsPolicy: lastModifiedDateTime' }
+    $script:ManifestExtra = [ordered]@{ ResolveNames = $ResolveNames; VolatileFieldsExcludedFromHashes = 'policies: modifiedDateTime, grantControls.authenticationStrength.createdDateTime/modifiedDateTime; namedLocations and authenticationStrengths: modifiedDateTime; authenticationMethodsPolicy: lastModifiedDateTime' }
 
     # ---- 1. Reads ----
     $read = [ordered]@{}

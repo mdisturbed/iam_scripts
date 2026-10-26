@@ -31,6 +31,7 @@ Start with the scripts that need the least setup and give the clearest known ans
 3. **03** apps and consents, **10** guests, **12** stale accounts, **13** sync scope
 4. **07** role mining, **08** extension attributes, **23** attribute population
 5. **24** CA report-only impact (after 01), **25** Purview (needs Purview roles), **26** PAM coverage (after 02, 04, 11, 17 and a PAM export)
+5. **27** identity population (before any KPI), **28** CA snapshot (before any CA change), **30** access-review evidence (after 20), **29** pilot outcome (after the pilot users have signed in)
 5. **16** device posture, **21** identity risk, **22** PIM settings, **20** governance coverage
 6. **18** AD delegation, **19** DC authentication protocols (needs Event Log Readers)
 7. **09** mail and sharing (needs Exchange access), **11** Azure RBAC (needs Azure Reader), **17** AWS (needs the read-only role in each account)
@@ -77,6 +78,8 @@ Pick one or two facts per script that you can confirm independently in the porta
 | 24 CA report-only impact | One report-only policy's result for a user and day matches the sign-in's **Report-only** tab in the Entra portal |
 | 25 Purview classification | DLP policy count and modes match **Purview > Data loss prevention > Policies** |
 | 26 PAM vault coverage | One known vaulted account shows `Vaulted = True` with the right safe; one known unvaulted shows `NotVaulted` |
+| 27 Identity population | `Entra users (all)` matches the user count in Entra > Users; `AD users enabled` matches `(Get-ADUser -Filter 'Enabled -eq $true').Count`; one known admin account is `AdminAccount`; every row in `population-exclusions.csv` has a reason |
+@@28@@| 30 Access review evidence | One completed review's decision counts match **Identity Governance > Access reviews > (review) > Results**; one known deny shows its apply result |
 
 ## Tuning on first run
 
@@ -101,6 +104,8 @@ Expect to adjust these on the first run and record the values used. They're writ
 | 24 | `-SignInLookbackDays`, `-MaxSignInRecords` |
 | 25 | `-ContentExplorerSits` to the organization's list |
 | 26 | `-Pam*Column` mappings to the export's headers |
+| 27 | `-AdminNamePatterns`, `-ServiceNamePatterns`, `-TestNamePatterns`, `-ResourceNamePatterns`, HR column names, `-BreakGlassUpns`; agree the exclusions file with the approver |
+@@28@@| 30 | `-SinceDays`, `-DefinitionNameLike` to the reviews in scope |
 | 14 | Column names, `-SystemName`, status value lists |
 
 ## Reporting a problem
@@ -153,3 +158,7 @@ When a script is pilot-verified, hand it over with:
 | 24 CA report-only impact | 1.1.0 | | | | | Mock-tested |
 | 25 Purview classification and DLP | 1.1.0 | | | | | Mock-tested |
 | 26 PAM vault coverage | 1.1.0 | | | | | Mock-tested |
+| 27 Identity population | 1.0.0 | | | | | Mock-tested |
+| 28 CA policy snapshot | 1.0.0 | | | | | Mock-tested |
+| 29 Pilot outcome | 1.0.0 | | | | | Mock-tested |
+| 30 Access review evidence | 1.0.0 | | | | | Mock-tested |
