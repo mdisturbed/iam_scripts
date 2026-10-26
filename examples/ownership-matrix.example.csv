@@ -1,0 +1,5 @@
+Area,Object,ObjectType,BusinessOwner,TechnicalOwner,Operator,ReviewCadence,Runbook,EscalationPath,EvidenceSource,Notes
+Conditional Access,Require MFA for all users,CA policy,Role1,Role2,Role3,Quarterly,runbook-ca-mfa.md,Role2 then Role1,28-CaPolicySnapshot,
+Privileged access,Tier 0 Entra roles,Role set,Role1,Role2,Role3,Quarterly,runbook-pim.md,Role2 then Role1,02-PrivilegedAccess; 22-PimRoleSettings,
+Access reviews,Quarterly review of Group1,Access review,Role4,Role2,Role3,Quarterly,runbook-access-reviews.md,Role2,30-AccessReviewEvidence,
+Lifecycle,Joiner / leaver automation,Process,Role4,Role2,Role3,Monthly,runbook-jml.md,Role2 then Role1,06-JmlTiming; 14-IgaReconciliation,

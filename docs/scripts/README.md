@@ -30,5 +30,9 @@ One page per script: what it collects, parameters, output files, permissions, pi
 | 24 | [CA report-only impact](24-ca-reportonly-impact.md) | What does each Conditional Access policy do to real sign-ins, who would a report-only policy block or challenge, and which sign-ins does no enforced policy cover? | Entra sign-in logs | 1.1.0 |
 | 25 | [Purview classification and DLP](25-purview-classification.md) | What can classify and protect regulated data, what is switched on, who is excluded, who can see or bypass it, and how much tagged content exists? | Microsoft Purview | 1.1.0 |
 | 26 | [PAM vault coverage](26-pam-vault-coverage.md) | Which privileged, service and delegated accounts are managed in the PAM vault, which are not, and which vault entries are stale? | PAM export + 02/04/11/17/18 | 1.1.0 |
+| 27 | [Identity population](27-identity-population.md) | Who exactly is in scope, how many of each kind of identity are there, and who was excluded and why? | AD + Entra (+ HR file) | 1.0.0 |
+| 28 | [CA policy snapshot](28-ca-policy-snapshot.md) | What exactly is the Conditional Access configuration right now, and what changed since the last snapshot? | Entra | 1.0.0 |
+| 29 | [Pilot outcome](29-pilot-outcome.md) | Did each pilot test case, expected and adverse, give the result it should, and which sign-in proves it? | Entra sign-in logs + test-case file | 1.0.0 |
+| 30 | [Access review evidence](30-access-review-evidence.md) | For each access review that ran, who reviewed what, what did they decide and why, and were removals applied? | Entra ID Governance | 1.0.0 |
 
 [← Back to README](../../README.md)
