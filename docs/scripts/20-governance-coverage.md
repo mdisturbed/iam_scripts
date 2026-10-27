@@ -1,6 +1,6 @@
 # 20 - Governance coverage
 
-**Script:** [`20-Get-GovernanceCoverage.ps1`](../../scripts/20-Get-GovernanceCoverage.ps1) · **Version:** 1.1.0 · **Source:** Entra ID Governance
+**Script:** [`20-Get-GovernanceCoverage.ps1`](../../scripts/20-Get-GovernanceCoverage.ps1) · **Version:** 1.1.1 · **Source:** Entra ID Governance
 
 > What share of apps, groups and privileged roles is actually covered by access reviews, what do access packages grant, and are joiner / mover / leaver workflows in place?
 

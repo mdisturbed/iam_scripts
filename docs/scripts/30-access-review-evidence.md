@@ -1,6 +1,6 @@
 # 30 - Access review evidence
 
-**Script:** [`30-Get-AccessReviewEvidence.ps1`](../../scripts/30-Get-AccessReviewEvidence.ps1) · **Version:** 1.0.0 · **Source:** Entra ID Governance
+**Script:** [`30-Get-AccessReviewEvidence.ps1`](../../scripts/30-Get-AccessReviewEvidence.ps1) · **Version:** 1.0.1 · **Source:** Entra ID Governance
 
 > For each access review that ran, who reviewed what, what did they decide and why, and were the removals actually applied?
 

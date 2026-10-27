@@ -2,6 +2,20 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.9.2 - 2026-10-27
+
+### Fixed
+- All Graph scripts (01, 02, 03, 08, 09, 10, 11, 12, 13, 16, 20, 21, 22, 24, 27, 28, 29, 30): `Invoke-GraphGet` now retries client-side timeouts, not just 429 and 5xx. A request that hits the Graph client timeout (`HttpClient.Timeout`, a canceled or timed-out request) or returns HTTP 408 or 504 is retried with the same back-off, up to 6 times, with a WARN line each time. Before, one slow sign-in query made the whole dataset Blocked.
+
+### Changed
+- `01-Get-MfaCoverage.ps1` 1.1.2, `24-Get-CaReportOnlyImpact.ps1` 1.1.1, `29-Test-PilotOutcome.ps1` 1.0.1: sign-in reads over a lookback window are now split into time slices (new `-SignInSliceHours`, default 24, range 1-168). Each slice is one query with `createdDateTime ge <start> and createdDateTime lt <end>`. Slices do not overlap and together cover exactly the lookback. This applies to 01 (interactive and non-interactive single-factor), 24 (all sign-in reads) and 29 (the `-CheckScopeLeak` read; per-user reads are unchanged).
+- Slices are read newest first. In 01 and 29 the window ends at the run start, so both 01 sign-in datasets cover the same window. `-MaxSignInRecords` counts across all slices. When it is reached, the note gives the window actually covered (earliest sign-in read up to the run time).
+- If a slice still fails after retries, the other slices are kept and the dataset is marked Partial. The note lists the missing windows in UTC. If every slice fails, the dataset is Blocked or EvidenceUnavailable as before. A 400, 401, 403 or 404 stops the read at once, since every slice would fail the same way.
+- 24 adds the `SignInSlicesNotRead` flag and a *Sign-in slices not read* summary row (blank, with the reason, when the sign-ins could not be read at all).
+- Slice boundaries in the filter are formatted with the invariant culture, so the query is the same on any regional setting.
+- Other Graph scripts get a patch version bump for the retry change only.
+- Sign-in slices end with `createdDateTime lt <end>`. Graph documents only `eq`, `le` and `ge` for that property, so if `lt` is rejected the read switches to `le` once and drops sign-ins that appear in two adjacent slices (matched by sign-in id).
+
 ## 1.9.1 - 2026-10-27
 
 ### Fixed

@@ -28,7 +28,10 @@
       - -PilotGroupId: reads the pilot group's members (transitive) and checks each test user's
         membership against the InPilotExpected column of the test-case file
       - -CheckScopeLeak: reads every interactive sign-in in the window and lists users outside the
-        pilot group on whom a pilot policy was enforced (result success or failure)
+        pilot group on whom a pilot policy was enforced (result success or failure). This read runs
+        one time slice at a time (-SignInSliceHours, default 24), newest first. A slice that still
+        fails after retries is skipped and pilot-scope-leak is marked Partial with the missing
+        windows (UTC) in the note; if every slice fails it is Blocked as before.
 
     Report-only results are only returned when the request sends
     "Prefer: include-unknown-enum-members"; the script always sends it. Conditional Access results
@@ -72,7 +75,12 @@
     group on whom a pilot policy was enforced. Needs -PilotGroupId.
 
 .PARAMETER MaxSignInRecords
-    Safety cap for the -CheckScopeLeak read; output is marked TRUNCATED if reached.
+    Safety cap for the -CheckScopeLeak read, counted across all slices; output is marked TRUNCATED
+    if reached, with the earliest sign-in read (the read covers that time up to the run time).
+
+.PARAMETER SignInSliceHours
+    Hours of sign-ins read per Graph query in the -CheckScopeLeak read (1-168, default 24). The
+    per-user reads are not sliced.
 
 .EXAMPLE
     .\29-Test-PilotOutcome.ps1 -TestCaseCsv .\pilot-test-cases.csv
@@ -82,7 +90,7 @@
     .\29-Test-PilotOutcome.ps1 -TestCaseCsv .\rollback-test-cases.csv -EvaluateAll
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x, Microsoft.Graph.Authentication.
     Scopes  : AuditLog.Read.All, Policy.Read.All, Directory.Read.All; GroupMember.Read.All for the
               pilot group. Role: Global Reader or Security Reader (and Reports Reader for sign-ins).
@@ -110,13 +118,15 @@ param(
     [string]$PilotGroupId = '',
     [string[]]$PolicyIds = @(),
     [switch]$CheckScopeLeak,
-    [int]$MaxSignInRecords = 100000
+    [int]$MaxSignInRecords = 100000,
+    [ValidateRange(1, 168)]
+    [int]$SignInSliceHours = 24
     # -------------------------------------------------------------------------
 )
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '29-PilotOutcome'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $RequiredScopes = @('AuditLog.Read.All', 'Policy.Read.All', 'Directory.Read.All')
 if ($PilotGroupId) { $RequiredScopes += 'GroupMember.Read.All' }
 
@@ -164,6 +174,8 @@ function Connect-DiscoveryGraph {
 
 function Invoke-GraphGet {
     # The ONLY function that talks to Graph. Method is hard-coded to GET.
+    # Retries up to 6 times with backoff on HTTP 408, 429 and 5xx, and on client-side timeouts
+    # (HttpClient.Timeout, TaskCanceledException / OperationCanceledException, TimeoutException).
     param([Parameter(Mandatory)][string]$Uri, [hashtable]$Headers = @{})
     $attempt = 0
     while ($true) {
@@ -174,10 +186,18 @@ function Invoke-GraphGet {
             $attempt++
             $status = $null
             try { $status = [int]$_.Exception.Response.StatusCode } catch { }
-            if (($status -eq 429 -or $status -ge 500) -and $attempt -le 6) {
+            # A timeout can arrive wrapped: walk the exception and its InnerException chain.
+            $timedOut = $false
+            $ex = $_.Exception
+            while ($null -ne $ex) {
+                if ($ex -is [System.OperationCanceledException] -or $ex -is [System.TimeoutException] -or "$($ex.Message)" -match 'HttpClient\.Timeout|The request was canceled|timed out') { $timedOut = $true; break }
+                $ex = $ex.InnerException
+            }
+            if (($status -eq 408 -or $status -eq 429 -or $status -ge 500 -or $timedOut) -and $attempt -le 6) {
                 $wait = [int][math]::Min(120, [math]::Pow(2, $attempt))
                 try { $ra = $_.Exception.Response.Headers.RetryAfter.Delta.TotalSeconds; if ($ra) { $wait = [int][math]::Ceiling($ra) } } catch { }
-                Write-RunLog ("HTTP {0} on {1}; retry {2}/6 in {3}s" -f $status, $Uri, $attempt, $wait) 'WARN'
+                $reason = $(if ($status) { "HTTP $status" } else { 'Client timeout' })
+                Write-RunLog ("{0} on {1}; retry {2}/6 in {3}s" -f $reason, $Uri, $attempt, $wait) 'WARN'
                 Start-Sleep -Seconds $wait
             }
             else { throw }
@@ -364,6 +384,110 @@ function Get-SignInPage {
         if ($out.Count -and ($out.Count % 10000) -lt 1000) { Write-RunLog ("{0}: {1} read so far" -f $Label, $out.Count) }
     }
     return [pscustomobject]@{ Items = $out; Truncated = $truncated; Earliest = $earliest; Latest = $latest; Label = $Label }
+}
+
+function Get-SignInSliceWindow {
+    # [Start, End) windows of -SliceHours, newest first, that cover exactly -Since to -Until with no overlap.
+    param([Parameter(Mandatory)][datetime]$Since, [Parameter(Mandatory)][datetime]$Until, [Parameter(Mandatory)][int]$SliceHours)
+    $windows = [System.Collections.Generic.List[object]]::new()
+    $end = $Until
+    while ($end -gt $Since) {
+        $start = $end.AddHours(-$SliceHours)
+        if ($start -lt $Since) { $start = $Since }
+        $windows.Add([pscustomobject]@{ Start = $start; End = $end })
+        $end = $start
+    }
+    return , $windows
+}
+
+function Get-SignInBySlice {
+    # Reads sign-ins one time slice at a time instead of one query over the whole lookback (a large
+    # window can run past the Graph client timeout). Each slice filters
+    # "createdDateTime ge <start> and createdDateTime lt <end>" plus -Filter. -Since and -Until are UTC.
+    # Slices run newest first and Graph returns sign-ins newest first, so when -MaxRecords (a cap on the
+    # total across all slices) is reached, everything from the earliest sign-in read up to -Until was read.
+    # A slice that still fails after Invoke-GraphGet's retries is skipped and listed in FailedSlices; the
+    # other slices are still read. Throws when every slice failed, or at once on HTTP 400/401/403/404
+    # (the query or the permissions are wrong, so every slice would fail the same way).
+    param(
+        [Parameter(Mandatory)][string]$BaseUri,
+        [string]$Filter = '',
+        [Parameter(Mandatory)][datetime]$Since,
+        [datetime]$Until = [datetime]::MinValue,
+        [ValidateRange(1, 168)][int]$SliceHours = 24,
+        [int]$MaxRecords = 0,
+        [string]$Label = 'sign-ins',
+        [hashtable]$Headers = @{},
+        [scriptblock]$Transform = $null
+    )
+    # Invariant culture: ':' and the calendar in a custom format follow the current culture otherwise (e.g. '.' in fi-FI, Buddhist year in th-TH).
+    $fmt = 'yyyy-MM-ddTHH:mm:ssZ'; $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    if ($Until -eq [datetime]::MinValue) { $Until = (Get-Date).ToUniversalTime() }
+    $Since = $Since.AddTicks(-($Since.Ticks % [TimeSpan]::TicksPerSecond))
+    $Until = $Until.AddTicks(-($Until.Ticks % [TimeSpan]::TicksPerSecond))
+    $windows = Get-SignInSliceWindow -Since $Since -Until $Until -SliceHours $SliceHours
+    $out = [System.Collections.Generic.List[object]]::new()
+    $failed = [System.Collections.Generic.List[string]]::new()
+    $truncated = $false; $earliest = $null; $latest = $null; $sliceOk = 0; $lastError = $null
+    # Upper bound uses 'lt'. Graph documents only eq / le / ge for createdDateTime; if 'lt' is rejected (400),
+    # fall back to 'le' once and drop the boundary duplicates by sign-in id.
+    $endOp = 'lt'; $seenIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $wi = 0
+    while ($wi -lt $windows.Count) {
+        $w = $windows[$wi]; $wi++
+        $startText = $w.Start.ToString($fmt, $inv); $endText = $w.End.ToString($fmt, $inv)
+        $f = "createdDateTime ge $startText and createdDateTime $endOp $endText"
+        if ($Filter) { $f += " and $Filter" }
+        $next = $BaseUri + '?$top=999&$filter=' + [uri]::EscapeDataString($f)
+        $slice = [System.Collections.Generic.List[object]]::new()
+        try {
+            while ($next) {
+                $resp = Invoke-GraphGet -Uri $next -Headers $Headers
+                foreach ($item in @($resp.value)) {
+                    if ($null -eq $item) { continue }
+                    $iid = [string]$item.id
+                    if ($iid -and -not $seenIds.Add($iid)) { continue }
+                    if ($Transform) { $slice.Add((& $Transform $item)) } else { $slice.Add($item) }
+                }
+                if ($MaxRecords -gt 0 -and ($out.Count + $slice.Count) -ge $MaxRecords) { $truncated = $true; break }
+                $next = $null
+                if ($resp.PSObject.Properties.Name -contains '@odata.nextLink') { $next = $resp.'@odata.nextLink' }
+            }
+            $sliceOk++
+        }
+        catch {
+            $status = 0
+            try { $status = [int]$_.Exception.Response.StatusCode } catch { }
+            if ($status -eq 400 -and $endOp -eq 'lt') {
+                $endOp = 'le'; $wi--
+                Write-RunLog ("{0}: 'lt' on createdDateTime rejected (400); retrying with 'le' and removing boundary duplicates" -f $Label) 'WARN'
+                continue
+            }
+            if (@(400, 401, 403, 404) -contains $status) { throw }
+            $lastError = $_
+            $failed.Add(('{0} to {1}' -f $startText, $endText))
+            Write-RunLog ("{0}: slice {1} to {2} not read after retries ({3}); reading the other slices" -f $Label, $startText, $endText, $_.Exception.Message) 'WARN'
+            continue
+        }
+        foreach ($s in $slice) {
+            $out.Add($s)
+            $t = $null; try { $t = ([datetime]$s.createdDateTime).ToUniversalTime() } catch { }
+            if ($t) { if (-not $earliest -or $t -lt $earliest) { $earliest = $t }; if (-not $latest -or $t -gt $latest) { $latest = $t } }
+        }
+        Write-RunLog ("{0}: slice {1} to {2}: {3} read ({4} so far)" -f $Label, $startText, $endText, $slice.Count, $out.Count)
+        if ($truncated) {
+            Write-RunLog ("{0}: stopped at {1} records; TRUNCATED (earliest read {2})" -f $Label, $MaxRecords, $(if ($earliest) { $earliest.ToString($fmt, $inv) } else { 'n/a' })) 'WARN'
+            break
+        }
+    }
+    if ($sliceOk -eq 0 -and $null -ne $lastError) { throw $lastError }
+    $failedNote = $(if ($failed.Count) { '{0} of {1} {2}-hour slice(s) not read after retries (UTC): {3}' -f $failed.Count, $windows.Count, $SliceHours, ($failed -join '; ') } else { '' })
+    return [pscustomobject]@{
+        Items = $out; Truncated = $truncated; Earliest = $earliest; Latest = $latest; Label = $Label
+        Since = $Since; Until = $Until; SliceHours = $SliceHours; SliceCount = $windows.Count; SlicesRead = $sliceOk
+        FailedSlices = $failed.ToArray(); FailedNote = $failedNote
+        CoveredFrom = $(if ($truncated -and $earliest) { $earliest } else { $Since })
+    }
 }
 
 function ConvertFrom-UtcText {
@@ -675,8 +799,7 @@ try {
     elseif (-not $leakPolicyIds.Count) { Set-DatasetStatus -Name 'pilot-scope-leak' -Status 'Blocked' -Note 'No policy IDs: pass -PolicyIds or fill PolicyId in the test-case file' }
     else {
         try {
-            $f = 'createdDateTime ge ' + $windowStart.ToString('yyyy-MM-ddTHH:mm:ssZ')
-            $leakRead = Get-SignInPage -Uri ('https://graph.microsoft.com/v1.0/auditLogs/signIns?$top=999&$filter=' + [uri]::EscapeDataString($f)) -MaxRecords $MaxSignInRecords -Label 'all interactive sign-ins' -Type 'interactive'
+            $leakRead = Get-SignInBySlice -BaseUri 'https://graph.microsoft.com/v1.0/auditLogs/signIns' -Since $windowStart -Until $script:RunStartUtc -SliceHours $SignInSliceHours -MaxRecords $MaxSignInRecords -Label 'all interactive sign-ins' -Headers $EnumHeader -Transform { param($i) ConvertTo-SlimSignIn -SignIn $i -Type 'interactive' }
             $leakCaReadable = [bool](@($leakRead.Items | Where-Object { $_.HasCaProperty -and @($_.appliedConditionalAccessPolicies).Count -gt 0 }).Count)
             if ($leakRead.Items.Count -and -not $leakCaReadable) { Set-DatasetStatus -Name 'pilot-scope-leak' -Status 'Blocked' -Note $caNote }
             else {
@@ -711,9 +834,10 @@ try {
                         $_.Apps = (@($_.Apps) | Sort-Object) -join '; '
                         $_
                     } | Sort-Object PolicyName, @{ Expression = 'SignIns'; Descending = $true }, UserPrincipalName)
-                $leakNote = 'Users outside the pilot group on whom a listed policy was enforced (success or failure); interactive sign-ins since {0}; policies: {1}' -f $windowStart.ToString('yyyy-MM-ddTHH:mm:ssZ'), ($leakPolicyIds -join ', ')
-                if ($leakRead.Truncated) { $leakNote += ('; TRUNCATED at {0}: earliest sign-in read {1}' -f $MaxSignInRecords, $(if ($leakRead.Earliest) { $leakRead.Earliest.ToString('yyyy-MM-ddTHH:mm:ssZ') } else { 'n/a' })) }
-                Export-Dataset -Name 'pilot-scope-leak' -Rows $leakRows -Status $(if ($leakRead.Truncated) { 'Partial' } else { 'Completed' }) -Note $leakNote
+                $leakNote = 'Users outside the pilot group on whom a listed policy was enforced (success or failure); interactive sign-ins since {0} in {1}-hour slices; policies: {2}' -f $windowStart.ToString('yyyy-MM-ddTHH:mm:ssZ'), $SignInSliceHours, ($leakPolicyIds -join ', ')
+                if ($leakRead.Truncated) { $leakNote += ('; TRUNCATED at {0}: earliest sign-in read {1}, so only {1} to {2} is covered' -f $MaxSignInRecords, $(if ($leakRead.Earliest) { $leakRead.Earliest.ToString('yyyy-MM-ddTHH:mm:ssZ') } else { 'n/a' }), $leakRead.Until.ToString('yyyy-MM-ddTHH:mm:ssZ')) }
+                if ($leakRead.FailedNote) { $leakNote += "; PARTIAL: $($leakRead.FailedNote)" }
+                Export-Dataset -Name 'pilot-scope-leak' -Rows $leakRows -Status $(if ($leakRead.Truncated -or $leakRead.FailedNote) { 'Partial' } else { 'Completed' }) -Note $leakNote
             }
         }
         catch {
@@ -764,6 +888,6 @@ catch {
     throw
 }
 finally {
-    Write-RunManifest -Context $ctx -Parameters @{ TestCaseCsv = $TestCaseCsv; LookbackHours = $LookbackHours; MaxSignInsPerUser = $MaxSignInsPerUser; IncludeNonInteractive = [bool]$IncludeNonInteractive; EvaluateAll = [bool]$EvaluateAll; PilotGroupId = $PilotGroupId; PolicyIds = @($PolicyIds); CheckScopeLeak = [bool]$CheckScopeLeak; MaxSignInRecords = $MaxSignInRecords }
+    Write-RunManifest -Context $ctx -Parameters @{ TestCaseCsv = $TestCaseCsv; LookbackHours = $LookbackHours; MaxSignInsPerUser = $MaxSignInsPerUser; IncludeNonInteractive = [bool]$IncludeNonInteractive; EvaluateAll = [bool]$EvaluateAll; PilotGroupId = $PilotGroupId; PolicyIds = @($PolicyIds); CheckScopeLeak = [bool]$CheckScopeLeak; MaxSignInRecords = $MaxSignInRecords; SignInSliceHours = $SignInSliceHours }
     Write-RunLog ("Finished. Evidence folder: {0}" -f $script:RunFolder)
 }

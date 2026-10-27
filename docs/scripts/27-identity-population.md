@@ -1,6 +1,6 @@
 # 27 - Identity population
 
-**Script:** [`27-Get-IdentityPopulation.ps1`](../../scripts/27-Get-IdentityPopulation.ps1) · **Version:** 1.0.0 · **Source:** AD + Entra (+ HR file, exclusions file)
+**Script:** [`27-Get-IdentityPopulation.ps1`](../../scripts/27-Get-IdentityPopulation.ps1) · **Version:** 1.0.1 · **Source:** AD + Entra (+ HR file, exclusions file)
 
 > Who exactly is in scope, how many of each kind are there, and who was excluded and why?
 

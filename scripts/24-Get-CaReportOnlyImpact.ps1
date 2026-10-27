@@ -23,8 +23,15 @@
       - whether each affected user is privileged (any directory role path: active, eligible, via
         group or PIM for Groups) and whether that role is Tier 0
 
+    Sign-ins are read one time slice at a time (-SignInSliceHours, default 24), newest slice first,
+    so no single Graph query spans the whole lookback. A slice that still fails after retries is
+    skipped: the other slices are read and the datasets are marked Partial with the missing windows
+    (UTC) in the note. If every slice fails, the sign-in datasets are Blocked as before.
+
     When the sign-in read stops at -MaxSignInRecords, the window actually covered (from the
     earliest sign-in read) is reported, so a truncated run is never read as the full lookback.
+    Slices are read newest first and Graph returns sign-ins newest first, so a truncated read covers
+    the earliest sign-in read up to the run time.
 
     Report-only results are only returned when the request sends
     "Prefer: include-unknown-enum-members" (Microsoft Graph appliedConditionalAccessPolicy); the
@@ -45,7 +52,12 @@
     Days of sign-in logs to read (1-30). Report-only decisions usually want 14-30 days.
 
 .PARAMETER MaxSignInRecords
-    Safety cap per sign-in query; output is marked TRUNCATED if reached.
+    Safety cap per sign-in type (interactive, non-interactive, service principal), counted across
+    all slices; output is marked TRUNCATED if reached.
+
+.PARAMETER SignInSliceHours
+    Hours of sign-ins read per Graph query (1-168, default 24). Use a smaller slice when a large
+    tenant still times out.
 
 .PARAMETER ReportOnlyPoliciesOnly
     Only keep results for policies in report-only state.
@@ -65,9 +77,11 @@
     .\24-Get-CaReportOnlyImpact.ps1 -SignInLookbackDays 30 -MaxSignInRecords 300000 -ReportOnlyPoliciesOnly
 .EXAMPLE
     .\24-Get-CaReportOnlyImpact.ps1 -SignInLookbackDays 7 -IncludeServicePrincipal
+.EXAMPLE
+    .\24-Get-CaReportOnlyImpact.ps1 -SignInLookbackDays 30 -SignInSliceHours 6
 
 .NOTES
-    Version : 1.1.0
+    Version : 1.1.1
     Requires: PowerShell 5.1 or 7.x, Microsoft.Graph.Authentication.
     Scopes  : Policy.Read.All, AuditLog.Read.All, RoleManagement.Read.Directory, Directory.Read.All,
               PrivilegedEligibilitySchedule.Read.AzureADGroup. Role: Global Reader or Security Reader.
@@ -87,6 +101,8 @@ param(
     [ValidateRange(1, 30)]
     [int]$SignInLookbackDays = 14,
     [int]$MaxSignInRecords = 100000,
+    [ValidateRange(1, 168)]
+    [int]$SignInSliceHours = 24,
     [switch]$ReportOnlyPoliciesOnly,
     [switch]$IncludeNonInteractive,
     [switch]$IncludeServicePrincipal,
@@ -98,7 +114,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '24-CaReportOnlyImpact'
-$ScriptVersion = '1.1.0'
+$ScriptVersion = '1.1.1'
 $RequiredScopes = @('Policy.Read.All', 'AuditLog.Read.All', 'RoleManagement.Read.Directory', 'Directory.Read.All', 'PrivilegedEligibilitySchedule.Read.AzureADGroup')
 
 
@@ -145,6 +161,8 @@ function Connect-DiscoveryGraph {
 
 function Invoke-GraphGet {
     # The ONLY function that talks to Graph. Method is hard-coded to GET.
+    # Retries up to 6 times with backoff on HTTP 408, 429 and 5xx, and on client-side timeouts
+    # (HttpClient.Timeout, TaskCanceledException / OperationCanceledException, TimeoutException).
     param([Parameter(Mandatory)][string]$Uri, [hashtable]$Headers = @{})
     $attempt = 0
     while ($true) {
@@ -155,10 +173,18 @@ function Invoke-GraphGet {
             $attempt++
             $status = $null
             try { $status = [int]$_.Exception.Response.StatusCode } catch { }
-            if (($status -eq 429 -or $status -ge 500) -and $attempt -le 6) {
+            # A timeout can arrive wrapped: walk the exception and its InnerException chain.
+            $timedOut = $false
+            $ex = $_.Exception
+            while ($null -ne $ex) {
+                if ($ex -is [System.OperationCanceledException] -or $ex -is [System.TimeoutException] -or "$($ex.Message)" -match 'HttpClient\.Timeout|The request was canceled|timed out') { $timedOut = $true; break }
+                $ex = $ex.InnerException
+            }
+            if (($status -eq 408 -or $status -eq 429 -or $status -ge 500 -or $timedOut) -and $attempt -le 6) {
                 $wait = [int][math]::Min(120, [math]::Pow(2, $attempt))
                 try { $ra = $_.Exception.Response.Headers.RetryAfter.Delta.TotalSeconds; if ($ra) { $wait = [int][math]::Ceiling($ra) } } catch { }
-                Write-RunLog ("HTTP {0} on {1}; retry {2}/6 in {3}s" -f $status, $Uri, $attempt, $wait) 'WARN'
+                $reason = $(if ($status) { "HTTP $status" } else { 'Client timeout' })
+                Write-RunLog ("{0} on {1}; retry {2}/6 in {3}s" -f $reason, $Uri, $attempt, $wait) 'WARN'
                 Start-Sleep -Seconds $wait
             }
             else { throw }
@@ -557,32 +583,112 @@ function ConvertTo-SlimSignIn {
     }
 }
 
-function Get-SignInPage {
-    # Pages sign-ins with the enum header (Invoke-GraphGetAll does not take headers).
-    # Returns the slimmed items, whether the cap was hit, and the earliest / latest createdDateTime read.
-    param([string]$Uri, [int]$MaxRecords, [string]$Label, [string]$Type)
+function Get-SignInSliceWindow {
+    # [Start, End) windows of -SliceHours, newest first, that cover exactly -Since to -Until with no overlap.
+    param([Parameter(Mandatory)][datetime]$Since, [Parameter(Mandatory)][datetime]$Until, [Parameter(Mandatory)][int]$SliceHours)
+    $windows = [System.Collections.Generic.List[object]]::new()
+    $end = $Until
+    while ($end -gt $Since) {
+        $start = $end.AddHours(-$SliceHours)
+        if ($start -lt $Since) { $start = $Since }
+        $windows.Add([pscustomobject]@{ Start = $start; End = $end })
+        $end = $start
+    }
+    return , $windows
+}
+
+function Get-SignInBySlice {
+    # Reads sign-ins one time slice at a time instead of one query over the whole lookback (a large
+    # window can run past the Graph client timeout). Each slice filters
+    # "createdDateTime ge <start> and createdDateTime lt <end>" plus -Filter. -Since and -Until are UTC.
+    # Slices run newest first and Graph returns sign-ins newest first, so when -MaxRecords (a cap on the
+    # total across all slices) is reached, everything from the earliest sign-in read up to -Until was read.
+    # A slice that still fails after Invoke-GraphGet's retries is skipped and listed in FailedSlices; the
+    # other slices are still read. Throws when every slice failed, or at once on HTTP 400/401/403/404
+    # (the query or the permissions are wrong, so every slice would fail the same way).
+    param(
+        [Parameter(Mandatory)][string]$BaseUri,
+        [string]$Filter = '',
+        [Parameter(Mandatory)][datetime]$Since,
+        [datetime]$Until = [datetime]::MinValue,
+        [ValidateRange(1, 168)][int]$SliceHours = 24,
+        [int]$MaxRecords = 0,
+        [string]$Label = 'sign-ins',
+        [hashtable]$Headers = @{},
+        [scriptblock]$Transform = $null
+    )
+    # Invariant culture: ':' and the calendar in a custom format follow the current culture otherwise (e.g. '.' in fi-FI, Buddhist year in th-TH).
+    $fmt = 'yyyy-MM-ddTHH:mm:ssZ'; $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    if ($Until -eq [datetime]::MinValue) { $Until = (Get-Date).ToUniversalTime() }
+    $Since = $Since.AddTicks(-($Since.Ticks % [TimeSpan]::TicksPerSecond))
+    $Until = $Until.AddTicks(-($Until.Ticks % [TimeSpan]::TicksPerSecond))
+    $windows = Get-SignInSliceWindow -Since $Since -Until $Until -SliceHours $SliceHours
     $out = [System.Collections.Generic.List[object]]::new()
-    $next = $Uri; $truncated = $false
-    $earliest = $null; $latest = $null
-    while ($next) {
-        $resp = Invoke-GraphGet -Uri $next -Headers $EnumHeader
-        foreach ($item in @($resp.value)) {
-            if ($null -eq $item) { continue }
-            $slim = ConvertTo-SlimSignIn -SignIn $item -Type $Type
-            $out.Add($slim)
-            $t = $null; try { $t = ([datetime]$slim.createdDateTime).ToUniversalTime() } catch { }
+    $failed = [System.Collections.Generic.List[string]]::new()
+    $truncated = $false; $earliest = $null; $latest = $null; $sliceOk = 0; $lastError = $null
+    # Upper bound uses 'lt'. Graph documents only eq / le / ge for createdDateTime; if 'lt' is rejected (400),
+    # fall back to 'le' once and drop the boundary duplicates by sign-in id.
+    $endOp = 'lt'; $seenIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $wi = 0
+    while ($wi -lt $windows.Count) {
+        $w = $windows[$wi]; $wi++
+        $startText = $w.Start.ToString($fmt, $inv); $endText = $w.End.ToString($fmt, $inv)
+        $f = "createdDateTime ge $startText and createdDateTime $endOp $endText"
+        if ($Filter) { $f += " and $Filter" }
+        $next = $BaseUri + '?$top=999&$filter=' + [uri]::EscapeDataString($f)
+        $slice = [System.Collections.Generic.List[object]]::new()
+        try {
+            while ($next) {
+                $resp = Invoke-GraphGet -Uri $next -Headers $Headers
+                foreach ($item in @($resp.value)) {
+                    if ($null -eq $item) { continue }
+                    $iid = [string]$item.id
+                    if ($iid -and -not $seenIds.Add($iid)) { continue }
+                    if ($Transform) { $slice.Add((& $Transform $item)) } else { $slice.Add($item) }
+                }
+                if ($MaxRecords -gt 0 -and ($out.Count + $slice.Count) -ge $MaxRecords) { $truncated = $true; break }
+                $next = $null
+                if ($resp.PSObject.Properties.Name -contains '@odata.nextLink') { $next = $resp.'@odata.nextLink' }
+            }
+            $sliceOk++
+        }
+        catch {
+            $status = 0
+            try { $status = [int]$_.Exception.Response.StatusCode } catch { }
+            if ($status -eq 400 -and $endOp -eq 'lt') {
+                $endOp = 'le'; $wi--
+                Write-RunLog ("{0}: 'lt' on createdDateTime rejected (400); retrying with 'le' and removing boundary duplicates" -f $Label) 'WARN'
+                continue
+            }
+            if (@(400, 401, 403, 404) -contains $status) { throw }
+            $lastError = $_
+            $failed.Add(('{0} to {1}' -f $startText, $endText))
+            Write-RunLog ("{0}: slice {1} to {2} not read after retries ({3}); reading the other slices" -f $Label, $startText, $endText, $_.Exception.Message) 'WARN'
+            continue
+        }
+        foreach ($s in $slice) {
+            $out.Add($s)
+            $t = $null; try { $t = ([datetime]$s.createdDateTime).ToUniversalTime() } catch { }
             if ($t) { if (-not $earliest -or $t -lt $earliest) { $earliest = $t }; if (-not $latest -or $t -gt $latest) { $latest = $t } }
         }
-        if ($MaxRecords -gt 0 -and $out.Count -ge $MaxRecords) { $truncated = $true; Write-RunLog ("{0}: stopped at {1} records; TRUNCATED (earliest read {2})" -f $Label, $MaxRecords, $(if ($earliest) { $earliest.ToString('yyyy-MM-ddTHH:mm:ssZ') } else { 'n/a' })) 'WARN'; break }
-        $next = $null
-        if ($resp.PSObject.Properties.Name -contains '@odata.nextLink') { $next = $resp.'@odata.nextLink' }
-        if ($out.Count -and ($out.Count % 10000) -lt 1000) { Write-RunLog ("{0}: {1} read so far" -f $Label, $out.Count) }
+        Write-RunLog ("{0}: slice {1} to {2}: {3} read ({4} so far)" -f $Label, $startText, $endText, $slice.Count, $out.Count)
+        if ($truncated) {
+            Write-RunLog ("{0}: stopped at {1} records; TRUNCATED (earliest read {2})" -f $Label, $MaxRecords, $(if ($earliest) { $earliest.ToString($fmt, $inv) } else { 'n/a' })) 'WARN'
+            break
+        }
     }
-    return [pscustomobject]@{ Items = $out; Truncated = $truncated; Earliest = $earliest; Latest = $latest; Label = $Label }
+    if ($sliceOk -eq 0 -and $null -ne $lastError) { throw $lastError }
+    $failedNote = $(if ($failed.Count) { '{0} of {1} {2}-hour slice(s) not read after retries (UTC): {3}' -f $failed.Count, $windows.Count, $SliceHours, ($failed -join '; ') } else { '' })
+    return [pscustomobject]@{
+        Items = $out; Truncated = $truncated; Earliest = $earliest; Latest = $latest; Label = $Label
+        Since = $Since; Until = $Until; SliceHours = $SliceHours; SliceCount = $windows.Count; SlicesRead = $sliceOk
+        FailedSlices = $failed.ToArray(); FailedNote = $failedNote
+        CoveredFrom = $(if ($truncated -and $earliest) { $earliest } else { $Since })
+    }
 }
 
 function Format-Window {
-    # "<label>: <earliest> to <latest> (N.N of D days)" for one sign-in query.
+    # "<label>: <earliest> to <latest> (N.N of D days)" for one sign-in read (all its slices).
     param($Read, [datetime]$Since)
     if (-not $Read.Items.Count) { return ('{0}: no sign-ins' -f $Read.Label) }
     $from = $(if ($Read.Truncated -and $Read.Earliest) { $Read.Earliest } else { $Since })
@@ -609,32 +715,29 @@ try {
     }
 
     # ---- 2. Sign-ins ----
-    $sinceDt = (Get-Date).ToUniversalTime().AddDays(-$SignInLookbackDays)
+    $untilDt = (Get-Date).ToUniversalTime()
+    $sinceDt = $untilDt.AddDays(-$SignInLookbackDays)
     $since = $sinceDt.ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $sliceArgs = @{ Since = $sinceDt; Until = $untilDt; SliceHours = $SignInSliceHours; MaxRecords = $MaxSignInRecords; Headers = $EnumHeader }
     $signIns = [System.Collections.Generic.List[object]]::new()
     $reads = [System.Collections.Generic.List[object]]::new()
     $truncatedAny = $false; $signInStatus = 'Completed'; $signInNote = ''
     try {
-        $uri = 'https://graph.microsoft.com/v1.0/auditLogs/signIns?$top=999&$filter=' + [uri]::EscapeDataString("createdDateTime ge $since")
-        $r = Get-SignInPage -Uri $uri -MaxRecords $MaxSignInRecords -Label 'interactive sign-ins' -Type 'interactive'
+        $r = Get-SignInBySlice -BaseUri 'https://graph.microsoft.com/v1.0/auditLogs/signIns' -Label 'interactive sign-ins' -Transform { param($i) ConvertTo-SlimSignIn -SignIn $i -Type 'interactive' } @sliceArgs
         foreach ($s in $r.Items) { $signIns.Add($s) }
         $reads.Add($r)
         if ($IncludeNonInteractive) {
-            $f = "createdDateTime ge $since and signInEventTypes/any(t: t eq 'nonInteractiveUser')"
-            $uri = 'https://graph.microsoft.com/beta/auditLogs/signIns?$top=999&$filter=' + [uri]::EscapeDataString($f)
-            $r = Get-SignInPage -Uri $uri -MaxRecords $MaxSignInRecords -Label 'non-interactive sign-ins' -Type 'nonInteractive'
+            $r = Get-SignInBySlice -BaseUri 'https://graph.microsoft.com/beta/auditLogs/signIns' -Filter "signInEventTypes/any(t: t eq 'nonInteractiveUser')" -Label 'non-interactive sign-ins' -Transform { param($i) ConvertTo-SlimSignIn -SignIn $i -Type 'nonInteractive' } @sliceArgs
             foreach ($s in $r.Items) { $signIns.Add($s) }
             $reads.Add($r)
         }
         if ($IncludeServicePrincipal) {
-            $f = "createdDateTime ge $since and signInEventTypes/any(t: t eq 'servicePrincipal')"
-            $uri = 'https://graph.microsoft.com/beta/auditLogs/signIns?$top=999&$filter=' + [uri]::EscapeDataString($f)
-            $r = Get-SignInPage -Uri $uri -MaxRecords $MaxSignInRecords -Label 'service principal sign-ins' -Type 'servicePrincipal'
+            $r = Get-SignInBySlice -BaseUri 'https://graph.microsoft.com/beta/auditLogs/signIns' -Filter "signInEventTypes/any(t: t eq 'servicePrincipal')" -Label 'service principal sign-ins' -Transform { param($i) ConvertTo-SlimSignIn -SignIn $i -Type 'servicePrincipal' } @sliceArgs
             foreach ($s in $r.Items) { $signIns.Add($s) }
             $reads.Add($r)
         }
         $truncatedAny = [bool](@($reads | Where-Object Truncated).Count)
-        Write-RunLog ("{0} sign-ins read (since {1})" -f $signIns.Count, $since)
+        Write-RunLog ("{0} sign-ins read (since {1}, {2}-hour slices)" -f $signIns.Count, $since, $SignInSliceHours)
     }
     catch {
         $signInStatus = Get-FailureStatus $_
@@ -643,6 +746,10 @@ try {
     }
     $windowText = (@($reads | ForEach-Object { Format-Window -Read $_ -Since $sinceDt }) -join '; ')
     $earliestRead = @($reads | Where-Object { $_.Earliest } | ForEach-Object { $_.Earliest } | Sort-Object | Select-Object -First 1)
+    # Slices that still failed after retries: the datasets are Partial and the note lists the missing windows.
+    $sliceGapNote = (@($reads | Where-Object { $_.FailedNote } | ForEach-Object { '{0}: {1}' -f $_.Label, $_.FailedNote }) -join '; ')
+    $slicesMissing = [bool]$sliceGapNote
+    if ($slicesMissing) { Write-RunLog ("Sign-in slices not read: {0}" -f $sliceGapNote) 'WARN' }
     $coveredFrom = $(if ($truncatedAny) { @($reads | Where-Object { $_.Truncated -and $_.Earliest } | ForEach-Object { $_.Earliest } | Sort-Object -Descending | Select-Object -First 1) } else { @($sinceDt) })
 
     $withCa = @($signIns | Where-Object { $_.HasCaProperty -and @($_.appliedConditionalAccessPolicies).Count -gt 0 }).Count
@@ -767,6 +874,7 @@ try {
                 $(if ($p.state -eq 'enabledForReportingButNotEnforced' -and (-not $a -or $a.Evaluated -eq 0)) { 'ReportOnlyNoSignInsEvaluated' })
                 $(if ($p.state -eq 'enabled' -and $a -and $a.Counts['failure']) { 'EnforcedBlocking' })
                 $(if ($truncatedAny) { 'SignInsTruncated' })
+                $(if ($slicesMissing) { 'SignInSlicesNotRead' })
             ) | Where-Object { $_ }) -join '; '
         $row['PolicyId'] = $id
         [pscustomobject]$row
@@ -782,8 +890,9 @@ try {
         $row['Flags'] = 'PolicyNotInCurrentList'; $row['PolicyId'] = $id
         [pscustomobject]$row
     })
-    $note = "Sign-ins since $since"
-    if ($truncatedAny) { $note += "; TRUNCATED at $MaxSignInRecords per query - window actually covered: $windowText. Shorten the lookback or raise -MaxSignInRecords" }
+    $note = "Sign-ins since $since ($SignInSliceHours-hour slices)"
+    if ($truncatedAny) { $note += "; TRUNCATED at $MaxSignInRecords per sign-in type - window actually covered: $windowText. Shorten the lookback or raise -MaxSignInRecords" }
+    if ($slicesMissing) { $note += "; PARTIAL: $sliceGapNote" }
     if ($IncludeNonInteractive) { $note += '; includes non-interactive (beta)' }
     if ($IncludeServicePrincipal) { $note += '; includes service principal sign-ins (beta)' }
     $privPart = $(if ($SkipPrivilegeJoin) { '' } elseif ($priv) { '' } else { "; IsPrivileged blank: $privNote" })
@@ -794,7 +903,7 @@ try {
     }
     else {
         $noCa = ($signIns.Count -and -not $withCa)
-        $partial = $(if ($truncatedAny -or $noCa) { 'Partial' } else { 'Completed' })
+        $partial = $(if ($truncatedAny -or $noCa -or $slicesMissing) { 'Partial' } else { 'Completed' })
         Export-Dataset -Name 'ca-policy-results' -Rows @($policyRows) -Status $partial -Note ($note + $(if ($signInNote) { "; $signInNote" } else { '' }))
         if ($noCa) {
             $noCaNote = 'No Conditional Access results in the sign-ins: the run account cannot read Conditional Access (Policy.Read.All, or Global Reader / Security Reader), so impact and gaps cannot be evaluated'
@@ -803,13 +912,13 @@ try {
         }
         else {
             $impactRows = @($impact.Values | Sort-Object PolicyName, Result, @{ Expression = 'SignIns'; Descending = $true }, UserPrincipalName)
-            Export-Dataset -Name 'ca-reportonly-impact' -Rows $impactRows -Status $(if ($truncatedAny -or $privPart) { 'Partial' } else { 'Completed' }) -Note ('One row per policy, user, app and result: report-only would-block / would-interrupt, and enforced blocks' + $(if ($truncatedAny) { "; TRUNCATED: $windowText" } else { '' }) + $privPart)
+            Export-Dataset -Name 'ca-reportonly-impact' -Rows $impactRows -Status $(if ($truncatedAny -or $privPart -or $slicesMissing) { 'Partial' } else { 'Completed' }) -Note ('One row per policy, user, app and result: report-only would-block / would-interrupt, and enforced blocks' + $(if ($truncatedAny) { "; TRUNCATED: $windowText" } else { '' }) + $(if ($slicesMissing) { "; PARTIAL: $sliceGapNote" } else { '' }) + $privPart)
             $neRows = @($noEnf.Values | ForEach-Object {
                     $_.ClientApps = (@($_.ClientApps) | Sort-Object) -join '; '
                     $_.SignInTypes = (@($_.SignInTypes) | Sort-Object) -join '; '
                     $_
                 } | Sort-Object @{ Expression = { $_.IsTier0 -eq $true }; Descending = $true }, @{ Expression = { $_.IsPrivileged -eq $true }; Descending = $true }, @{ Expression = 'SignIns'; Descending = $true }, UserPrincipalName)
-            Export-Dataset -Name 'no-enforced-policy-signins' -Rows $neRows -Status $(if ($truncatedAny -or $privPart) { 'Partial' } else { 'Completed' }) -Note ('Successful sign-ins where no enforced policy applied (every result notApplied / notEnabled / report-only), by user and app' + $(if ($truncatedAny) { "; TRUNCATED: $windowText" } else { '' }) + $privPart)
+            Export-Dataset -Name 'no-enforced-policy-signins' -Rows $neRows -Status $(if ($truncatedAny -or $privPart -or $slicesMissing) { 'Partial' } else { 'Completed' }) -Note ('Successful sign-ins where no enforced policy applied (every result notApplied / notEnabled / report-only), by user and app' + $(if ($truncatedAny) { "; TRUNCATED: $windowText" } else { '' }) + $(if ($slicesMissing) { "; PARTIAL: $sliceGapNote" } else { '' }) + $privPart)
         }
     }
 
@@ -833,8 +942,9 @@ try {
     Add-Metric 'Users a report-only policy would interrupt' $intAll.Count -Note 'Would need an extra step, such as MFA'
     Add-Metric 'Enabled policies that blocked sign-ins' @($policies.Values | Where-Object { $_.state -eq 'enabled' -and $agg.ContainsKey([string]$_.id) -and $agg[[string]$_.id].Counts['failure'] }).Count
     Add-Metric 'Sign-in data truncated' $truncatedAny
+    Add-Metric 'Sign-in slices not read' $(if ($signInStatus -ne 'Completed') { '' } else { [int](@($reads | ForEach-Object { $_.FailedSlices.Count }) | Measure-Object -Sum).Sum }) -Note $(if ($signInStatus -ne 'Completed') { "Not known: $signInNote" } elseif ($slicesMissing) { $sliceGapNote } else { "$SignInSliceHours-hour slices" })
     Add-Metric 'Earliest sign-in read' $(if ($earliestRead) { $earliestRead[0].ToString('yyyy-MM-ddTHH:mm:ssZ') } else { '' }) -Note $windowText
-    Add-Metric 'Sign-in window covered (days)' $(if ($signIns.Count -and $coveredFrom) { [math]::Round(((Get-Date).ToUniversalTime() - $coveredFrom[0]).TotalDays, 1) } else { '' }) -Note ("Requested: $SignInLookbackDays days" + $(if ($truncatedAny) { '; shorter because a query was truncated' } else { '' }))
+    Add-Metric 'Sign-in window covered (days)' $(if ($signIns.Count -and $coveredFrom) { [math]::Round(((Get-Date).ToUniversalTime() - $coveredFrom[0]).TotalDays, 1) } else { '' }) -Note ("Requested: $SignInLookbackDays days" + $(if ($truncatedAny) { '; shorter because a query was truncated' } else { '' }) + $(if ($slicesMissing) { '; some slices inside the window were not read (see Sign-in slices not read)' } else { '' }))
     $neAll = @($noEnf.Values)
     Add-Metric 'Successful sign-ins with no enforced policy' (($neAll | Measure-Object SignIns -Sum).Sum) -Note 'Only report-only, not applied or disabled results'
     Add-Metric 'Users / principals signing in with no enforced policy' @($neAll | Select-Object -ExpandProperty UserPrincipalName -Unique).Count
@@ -851,6 +961,6 @@ catch {
     throw
 }
 finally {
-    Write-RunManifest -Context $ctx -Parameters @{ SignInLookbackDays = $SignInLookbackDays; MaxSignInRecords = $MaxSignInRecords; ReportOnlyPoliciesOnly = [bool]$ReportOnlyPoliciesOnly; IncludeNonInteractive = [bool]$IncludeNonInteractive; IncludeServicePrincipal = [bool]$IncludeServicePrincipal; SkipPrivilegeJoin = [bool]$SkipPrivilegeJoin; TopAppCount = $TopAppCount }
+    Write-RunManifest -Context $ctx -Parameters @{ SignInLookbackDays = $SignInLookbackDays; MaxSignInRecords = $MaxSignInRecords; SignInSliceHours = $SignInSliceHours; ReportOnlyPoliciesOnly = [bool]$ReportOnlyPoliciesOnly; IncludeNonInteractive = [bool]$IncludeNonInteractive; IncludeServicePrincipal = [bool]$IncludeServicePrincipal; SkipPrivilegeJoin = [bool]$SkipPrivilegeJoin; TopAppCount = $TopAppCount }
     Write-RunLog ("Finished. Evidence folder: {0}" -f $script:RunFolder)
 }

@@ -1,6 +1,6 @@
 # 24 - CA report-only impact
 
-**Script:** [`24-Get-CaReportOnlyImpact.ps1`](../../scripts/24-Get-CaReportOnlyImpact.ps1) · **Version:** 1.1.0 · **Source:** Entra sign-in logs
+**Script:** [`24-Get-CaReportOnlyImpact.ps1`](../../scripts/24-Get-CaReportOnlyImpact.ps1) · **Version:** 1.1.1 · **Source:** Entra sign-in logs
 
 > What does each Conditional Access policy do to real sign-ins, who would a report-only policy block or challenge if it were switched on, and which successful sign-ins does no enforced policy cover?
 
@@ -11,7 +11,8 @@ Staged enforcement means running a policy in report-only mode first. Entra recor
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
 | `-SignInLookbackDays` | `14` | Days of sign-ins (1-30); 14-30 is usual before enforcing |
-| `-MaxSignInRecords` | `100000` | Safety cap per query; output marked TRUNCATED, with the window actually covered, if reached |
+| `-MaxSignInRecords` | `100000` | Safety cap per sign-in type, counted across all slices; output marked TRUNCATED, with the window actually covered, if reached |
+| `-SignInSliceHours` | `24` | Hours of sign-ins read per Graph query (1-168). Use a smaller slice if a large tenant still times out |
 | `-ReportOnlyPoliciesOnly` | off | Keep results for report-only policies only |
 | `-IncludeNonInteractive` | off | Add non-interactive sign-ins (beta endpoint; much larger) |
 | `-IncludeServicePrincipal` | off | Add service principal sign-ins (beta endpoint), so workload identity policies show impact |
@@ -28,7 +29,7 @@ Each run folder also has `summary.csv`, `dataset-status.csv`, `run-manifest.json
 
 | File | One row per | Key columns |
 |------|-------------|-------------|
-| `ca-policy-results.csv` | Policy | `State`, `SignInsEvaluated`, one column per result, `UsersWouldBeBlocked`, `UsersWouldBeInterrupted`, `UsersBlocked`, `TopAppsAffected`, `Flags` (ReportOnlyWouldImpactUsers, ReportOnlyNoSignInsEvaluated, EnforcedBlocking, PolicyNotInCurrentList, SignInsTruncated) |
+| `ca-policy-results.csv` | Policy | `State`, `SignInsEvaluated`, one column per result, `UsersWouldBeBlocked`, `UsersWouldBeInterrupted`, `UsersBlocked`, `TopAppsAffected`, `Flags` (ReportOnlyWouldImpactUsers, ReportOnlyNoSignInsEvaluated, EnforcedBlocking, PolicyNotInCurrentList, SignInsTruncated, SignInSlicesNotRead) |
 | `ca-reportonly-impact.csv` | Policy + user + app + result | `Result`, `Meaning`, `UserPrincipalName`, `AppDisplayName`, `ClientAppUsed`, `SignInType`, `SignIns`, `FirstSeenUtc`, `LastSeenUtc`, `PrincipalType`, `PrincipalId`, `IsPrivileged`, `IsTier0` |
 | `no-enforced-policy-signins.csv` | User (or service principal) + app | `SignIns`, `NoPolicyEvaluated`, `ReportOnlyWouldBlock`, `ReportOnlyWouldInterrupt`, `ClientApps`, `SignInTypes`, `FirstSeenUtc`, `LastSeenUtc`, `IsPrivileged`, `IsTier0` |
 
@@ -36,7 +37,8 @@ Each run folder also has `summary.csv`, `dataset-status.csv`, `run-manifest.json
 - Report-only results only come back when the request asks for them (`Prefer: include-unknown-enum-members`); the script always does.
 - If *Sign-ins carrying Conditional Access results* is 0 while sign-ins were read, the run account can't read Conditional Access: results are left out of the logs for it, and the impact and gap files are marked Blocked rather than empty.
 - *ReportOnlyNoSignInsEvaluated* means the policy's conditions never matched in the window. Widen the window before concluding it's safe.
-- **Truncation:** Graph returns the newest sign-ins first. When a query stops at `-MaxSignInRecords`, the summary rows *Earliest sign-in read* and *Sign-in window covered (days)* and the dataset notes give the window actually covered; the datasets are marked Partial.
+- **Slices:** sign-ins are read one slice at a time (`-SignInSliceHours`), newest slice first. If a slice still fails after retries, the other slices are kept, the datasets are marked Partial, `Flags` shows `SignInSlicesNotRead` and the notes and the *Sign-in slices not read* summary row list the missing windows (UTC). If every slice fails, the datasets are Blocked as before.
+- **Truncation:** Graph returns the newest sign-ins first, and slices are read newest first. When a read stops at `-MaxSignInRecords`, the summary rows *Earliest sign-in read* and *Sign-in window covered (days)* and the dataset notes give the window actually covered; the datasets are marked Partial.
 - `no-enforced-policy-signins.csv` counts successful sign-ins (error code 0) where every policy result was not applied, disabled or report-only. `NoPolicyEvaluated` counts sign-ins that carried no policy result at all. A privileged user here signs in with no enforced control.
 - For service principal sign-ins, `UserPrincipalName` holds the service principal name and `AppDisplayName` the resource it called.
 - Sign-ins are reduced to the fields used here as each page is read (the sign-in list API does not document `$select`).
@@ -62,6 +64,7 @@ Usually tuned on first run: `-SignInLookbackDays`, `-MaxSignInRecords`. See the 
 | Script 24: `ca-reportonly-impact` EvidenceUnavailable | No Entra ID P1, or no sign-in log access | Record as a finding, or use a Reports Reader / Global Reader account |
 | Script 24: no Conditional Access results in sign-ins | Account can't read Conditional Access | Global Reader / Security Reader, or `Policy.Read.All` |
 | Script 24: TRUNCATED | Hit `-MaxSignInRecords` | Shorter lookback or a higher cap; read *Sign-in window covered (days)* |
+| Script 24: Partial, `SignInSlicesNotRead` | Graph kept timing out for those windows after 6 retries | Rerun, or use a smaller `-SignInSliceHours` |
 | Script 24: `IsPrivileged` blank | Role assignments not readable | RoleManagement.Read.Directory, or `-SkipPrivilegeJoin` |
 
 General issues: [troubleshooting](../troubleshooting.md).

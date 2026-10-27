@@ -1,6 +1,6 @@
 # 28 - CA policy snapshot
 
-**Script:** [`28-Export-CaPolicySnapshot.ps1`](../../scripts/28-Export-CaPolicySnapshot.ps1) · **Version:** 1.0.0 · **Source:** Entra Conditional Access and authentication policies
+**Script:** [`28-Export-CaPolicySnapshot.ps1`](../../scripts/28-Export-CaPolicySnapshot.ps1) · **Version:** 1.0.1 · **Source:** Entra Conditional Access and authentication policies
 
 > What exactly is the Conditional Access configuration right now, and what changed since the last snapshot?
 

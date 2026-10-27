@@ -1,6 +1,6 @@
 # 01 - MFA coverage
 
-**Script:** [`01-Get-MfaCoverage.ps1`](../../scripts/01-Get-MfaCoverage.ps1) · **Version:** 1.1.1 · **Source:** Entra
+**Script:** [`01-Get-MfaCoverage.ps1`](../../scripts/01-Get-MfaCoverage.ps1) · **Version:** 1.1.2 · **Source:** Entra
 
 > Is MFA actually enforced everywhere, how strong is it, and who is left out?
 
@@ -16,7 +16,8 @@ Measures whether MFA is actually enforced, not just registered, how strong the r
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
 | `-SignInLookbackDays` | `7` | Days of sign-in logs to read (1-30) |
-| `-MaxSignInRecords` | `50000` | Safety cap per sign-in query; output marked TRUNCATED if reached |
+| `-MaxSignInRecords` | `50000` | Safety cap per sign-in query, counted across all slices; output marked TRUNCATED if reached |
+| `-SignInSliceHours` | `24` | Hours of sign-ins read per Graph query (1-168). Use a smaller slice if a large tenant still times out |
 | `-SkipSignIns` | off | Skip the interactive sign-in query |
 | `-SkipExcludedGroupMembers` | off | Skip expanding excluded groups |
 | `-SkipPrivilegeJoin` | off | Skip building the privileged set (no `IsPrivileged` / `IsTier0`, no excluded role holders) |
@@ -46,6 +47,7 @@ Each run folder also has `summary.csv`, `dataset-status.csv`, `run-manifest.json
 - `MethodStrength` is the strongest registered method: `PhishResistant` (FIDO2, passkey, Windows Hello, certificate), `Authenticator` (app or OTP), `PhoneOnly` (SMS/voice), `EmailOnly`, `None`. `HasPhoneMethodOnly` is true only when SMS/voice is the strongest method; email-only users are counted separately.
 - Filter `mfa-registration.csv` on `AccountEnabled` to leave disabled accounts out of coverage percentages.
 - In `ca-excluded-role-holders.csv`, `EffectiveForCa` is true for active or activated holders (direct or through a role-assignable group). Eligible holders become excluded when they activate; group owners are listed because they can add themselves.
+- Sign-ins are read one slice at a time (`-SignInSliceHours`), newest first, so no single query spans the whole lookback. If a slice still fails after retries, the other slices are kept and the dataset is `Partial`; the note lists the missing windows (UTC). If every slice fails, the dataset is `Blocked` as before.
 - `auth-methods-policy.csv` flags `SmsEnabled`, `VoiceEnabled`, `SmsSignInEnabled`, `LegacyMethodSettingsStillApply` and `RegistrationCampaignOff`.
 
 ## Permissions
@@ -67,6 +69,7 @@ See the [pilot runbook](../pilot-runbook.md).
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Script 01 note says TRUNCATED | Hit `-MaxSignInRecords` | Shorter lookback or higher cap |
+| Sign-in dataset `Partial`, note lists slices not read | Graph kept timing out for those windows after 6 retries | Rerun, or use a smaller `-SignInSliceHours` |
 | `ca-excluded-group-members` / `ca-excluded-role-holders` `Blocked` | CA policies could not be read, so exclusions are unknown (not "none") | Grant Policy.Read.All |
 | `mfa-registration` `Partial` | Privileged set or user list incomplete; the note names the source | Blank `IsPrivileged` / `AccountEnabled` cells are unknown, not false |
 | `auth-methods-policy` `Partial` or `Blocked` | Methods policy or security defaults not readable | Grant Policy.Read.All |

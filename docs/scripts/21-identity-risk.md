@@ -1,6 +1,6 @@
 # 21 - Identity risk
 
-**Script:** [`21-Get-IdentityRisk.ps1`](../../scripts/21-Get-IdentityRisk.ps1) · **Version:** 1.1.0 · **Source:** Entra ID Protection
+**Script:** [`21-Get-IdentityRisk.ps1`](../../scripts/21-Get-IdentityRisk.ps1) · **Version:** 1.1.1 · **Source:** Entra ID Protection
 
 > Who is at risk right now, and does Conditional Access act on risk - for everyone?
 

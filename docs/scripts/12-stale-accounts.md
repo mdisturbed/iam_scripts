@@ -1,6 +1,6 @@
 # 12 - Stale accounts
 
-**Script:** [`12-Get-StaleAccounts.ps1`](../../scripts/12-Get-StaleAccounts.ps1) · **Version:** 1.1.0 · **Source:** AD + Entra
+**Script:** [`12-Get-StaleAccounts.ps1`](../../scripts/12-Get-StaleAccounts.ps1) · **Version:** 1.1.1 · **Source:** AD + Entra
 
 > Which identities are really unused once AD and Entra activity are combined, and what do the stale ones still hold?
 

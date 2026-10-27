@@ -1,6 +1,6 @@
 # 09 - Mail forwarding and external sharing
 
-**Script:** [`09-Get-MailForwardingAndSharing.ps1`](../../scripts/09-Get-MailForwardingAndSharing.ps1) · **Version:** 1.1.0 · **Source:** Exchange Online + SharePoint
+**Script:** [`09-Get-MailForwardingAndSharing.ps1`](../../scripts/09-Get-MailForwardingAndSharing.ps1) · **Version:** 1.1.1 · **Source:** Exchange Online + SharePoint
 
 > Is mail being forwarded out, who can read or send as other mailboxes, and how open is SharePoint / OneDrive sharing?
 

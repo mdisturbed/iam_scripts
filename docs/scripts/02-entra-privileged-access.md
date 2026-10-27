@@ -1,6 +1,6 @@
 # 02 - Entra privileged access
 
-**Script:** [`02-Get-PrivilegedAccess.ps1`](../../scripts/02-Get-PrivilegedAccess.ps1) · **Version:** 1.1.0 · **Source:** Entra
+**Script:** [`02-Get-PrivilegedAccess.ps1`](../../scripts/02-Get-PrivilegedAccess.ps1) · **Version:** 1.1.1 · **Source:** Entra
 
 > Who really holds Entra admin roles - down to the account - and are those accounts well managed?
 

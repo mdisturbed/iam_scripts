@@ -1,6 +1,6 @@
 # 22 - PIM role settings
 
-**Script:** [`22-Get-PimRoleSettings.ps1`](../../scripts/22-Get-PimRoleSettings.ps1) · **Version:** 1.1.0 · **Source:** Entra PIM
+**Script:** [`22-Get-PimRoleSettings.ps1`](../../scripts/22-Get-PimRoleSettings.ps1) · **Version:** 1.1.1 · **Source:** Entra PIM
 
 > What does it actually take to activate each admin role or privileged group, and who approves it?
 

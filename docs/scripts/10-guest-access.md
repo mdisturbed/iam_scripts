@@ -1,6 +1,6 @@
 # 10 - Guest access
 
-**Script:** [`10-Get-GuestAccess.ps1`](../../scripts/10-Get-GuestAccess.ps1) · **Version:** 1.1.0 · **Source:** Entra
+**Script:** [`10-Get-GuestAccess.ps1`](../../scripts/10-Get-GuestAccess.ps1) · **Version:** 1.1.1 · **Source:** Entra
 
 > How many guests and external accounts are there, are they used, what can they reach, and which partner tenants do we trust?
 

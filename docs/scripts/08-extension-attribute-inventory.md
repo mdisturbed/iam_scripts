@@ -1,6 +1,6 @@
 # 08 - Extension attribute inventory
 
-**Script:** [`08-Get-ExtensionAttributeInventory.ps1`](../../scripts/08-Get-ExtensionAttributeInventory.ps1) · **Version:** 1.1.0 · **Source:** AD (+ Entra)
+**Script:** [`08-Get-ExtensionAttributeInventory.ps1`](../../scripts/08-Get-ExtensionAttributeInventory.ps1) · **Version:** 1.1.1 · **Source:** AD (+ Entra)
 
 > Which custom / extension attributes are free to carry new data, and does anything already read them?
 

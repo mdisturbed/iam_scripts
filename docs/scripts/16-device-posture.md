@@ -1,6 +1,6 @@
 # 16 - Device posture
 
-**Script:** [`16-Get-DevicePosture.ps1`](../../scripts/16-Get-DevicePosture.ps1) · **Version:** 1.1.0 · **Source:** Entra + Intune
+**Script:** [`16-Get-DevicePosture.ps1`](../../scripts/16-Get-DevicePosture.ps1) · **Version:** 1.1.1 · **Source:** Entra + Intune
 
 > Are devices joined, managed, compliant and backed up (LAPS / BitLocker), who can join them, and which accounts does device-based Conditional Access actually exempt?
 

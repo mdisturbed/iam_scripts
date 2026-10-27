@@ -1,6 +1,6 @@
 # 29 - Pilot outcome
 
-**Script:** [`29-Test-PilotOutcome.ps1`](../../scripts/29-Test-PilotOutcome.ps1) · **Version:** 1.0.0 · **Source:** Entra sign-in logs + test-case file
+**Script:** [`29-Test-PilotOutcome.ps1`](../../scripts/29-Test-PilotOutcome.ps1) · **Version:** 1.0.1 · **Source:** Entra sign-in logs + test-case file
 
 > Did each pilot test case (expected and adverse) produce the result it should, and is there sign-in evidence to prove it?
 
@@ -18,7 +18,8 @@ Pilot test evidence and rollback validation for MFA and Conditional Access chang
 | `-PilotGroupId` | none | Pilot group object ID; adds `pilot-scope-check.csv` |
 | `-PolicyIds` | the `PolicyId` values in the file | Policies checked by `-CheckScopeLeak` |
 | `-CheckScopeLeak` | off | Read every interactive sign-in in the window and list users outside the pilot group on whom a listed policy was enforced. Needs `-PilotGroupId` |
-| `-MaxSignInRecords` | `100000` | Safety cap for the `-CheckScopeLeak` read; marked TRUNCATED if reached |
+| `-MaxSignInRecords` | `100000` | Safety cap for the `-CheckScopeLeak` read, counted across all slices; marked TRUNCATED if reached |
+| `-SignInSliceHours` | `24` | Hours of sign-ins read per Graph query in the `-CheckScopeLeak` read (1-168). The per-user reads are not sliced |
 
 **Open first:** `summary.csv` (*All test cases passed*), then `pilot-test-results.csv` filtered on `Outcome` not `Pass`: the `Note` says what was expected and what happened. Then `pilot-scope-leak.csv`, if run. Anyone listed there is outside the pilot but already affected.
 
@@ -89,6 +90,7 @@ Usually tuned on first run: `App` values (use the app name as it appears in the 
 | Script 29: Blocked, *No Conditional Access results* | Account can't read Conditional Access | Global Reader / Security Reader, or `Policy.Read.All` |
 | Script 29: results EvidenceUnavailable | No Entra ID P1 | Record as a finding |
 | Script 29: `pilot-scope-leak` Blocked | No `-PilotGroupId`, or pilot group not readable | Pass `-PilotGroupId`; add GroupMember.Read.All |
+| Script 29: `pilot-scope-leak` Partial, note lists slices not read | Graph kept timing out for those windows after 6 retries | Rerun, or use a smaller `-SignInSliceHours` |
 
 General issues: [troubleshooting](../troubleshooting.md).
 

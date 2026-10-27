@@ -54,7 +54,7 @@
     .\28-Export-CaPolicySnapshot.ps1 -ResolveNames $false
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x, Microsoft.Graph.Authentication.
     Scopes  : Policy.Read.All; Directory.Read.All and Application.Read.All for name resolution.
               Role: Global Reader or Security Reader.
@@ -79,7 +79,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '28-CaPolicySnapshot'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $RequiredScopes = @('Policy.Read.All')
 if ($ResolveNames) { $RequiredScopes += @('Directory.Read.All', 'Application.Read.All') }
 
@@ -127,6 +127,8 @@ function Connect-DiscoveryGraph {
 
 function Invoke-GraphGet {
     # The ONLY function that talks to Graph. Method is hard-coded to GET.
+    # Retries up to 6 times with backoff on HTTP 408, 429 and 5xx, and on client-side timeouts
+    # (HttpClient.Timeout, TaskCanceledException / OperationCanceledException, TimeoutException).
     param([Parameter(Mandatory)][string]$Uri, [hashtable]$Headers = @{})
     $attempt = 0
     while ($true) {
@@ -137,10 +139,18 @@ function Invoke-GraphGet {
             $attempt++
             $status = $null
             try { $status = [int]$_.Exception.Response.StatusCode } catch { }
-            if (($status -eq 429 -or $status -ge 500) -and $attempt -le 6) {
+            # A timeout can arrive wrapped: walk the exception and its InnerException chain.
+            $timedOut = $false
+            $ex = $_.Exception
+            while ($null -ne $ex) {
+                if ($ex -is [System.OperationCanceledException] -or $ex -is [System.TimeoutException] -or "$($ex.Message)" -match 'HttpClient\.Timeout|The request was canceled|timed out') { $timedOut = $true; break }
+                $ex = $ex.InnerException
+            }
+            if (($status -eq 408 -or $status -eq 429 -or $status -ge 500 -or $timedOut) -and $attempt -le 6) {
                 $wait = [int][math]::Min(120, [math]::Pow(2, $attempt))
                 try { $ra = $_.Exception.Response.Headers.RetryAfter.Delta.TotalSeconds; if ($ra) { $wait = [int][math]::Ceiling($ra) } } catch { }
-                Write-RunLog ("HTTP {0} on {1}; retry {2}/6 in {3}s" -f $status, $Uri, $attempt, $wait) 'WARN'
+                $reason = $(if ($status) { "HTTP $status" } else { 'Client timeout' })
+                Write-RunLog ("{0} on {1}; retry {2}/6 in {3}s" -f $reason, $Uri, $attempt, $wait) 'WARN'
                 Start-Sleep -Seconds $wait
             }
             else { throw }

@@ -1,6 +1,6 @@
 # 11 - Azure RBAC
 
-**Script:** [`11-Get-AzureRbac.ps1`](../../scripts/11-Get-AzureRbac.ps1) · **Version:** 1.1.0 · **Source:** Azure + Entra
+**Script:** [`11-Get-AzureRbac.ps1`](../../scripts/11-Get-AzureRbac.ps1) · **Version:** 1.1.1 · **Source:** Azure + Entra
 
 > Who actually holds access to Azure resources (groups expanded to people and workload identities), at what scope, permanently or just-in-time, and through which other paths (Key Vault access policies, Lighthouse, managed identities)?
 

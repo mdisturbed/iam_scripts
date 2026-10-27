@@ -1,6 +1,6 @@
 # 03 - Apps and consents
 
-**Script:** [`03-Get-AppsAndConsents.ps1`](../../scripts/03-Get-AppsAndConsents.ps1) · **Version:** 1.1.0 · **Source:** Entra
+**Script:** [`03-Get-AppsAndConsents.ps1`](../../scripts/03-Get-AppsAndConsents.ps1) · **Version:** 1.1.1 · **Source:** Entra
 
 > Which apps can reach our data, who owns and can use them, and are they governed?
 

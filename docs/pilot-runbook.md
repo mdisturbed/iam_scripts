@@ -136,33 +136,33 @@ When a script is pilot-verified, hand it over with:
 
 | Script | Version | Pilot date | Run by | Known-answer checks passed | Tuned parameters | Status |
 |--------|---------|-----------|--------|----------------------------|------------------|--------|
-| 01 MFA coverage | 1.1.1 | | | | | Mock-tested |
-| 02 Privileged access | 1.1.0 | | | | | Mock-tested |
-| 03 Apps and consents | 1.1.0 | | | | | Mock-tested |
+| 01 MFA coverage | 1.1.2 | | | | | Mock-tested |
+| 02 Privileged access | 1.1.1 | | | | | Mock-tested |
+| 03 Apps and consents | 1.1.1 | | | | | Mock-tested |
 | 04 AD privileged / service accounts | 1.1.0 | | | | | Mock-tested |
 | 05 AD group nesting | 1.1.0 | | | | | Mock-tested |
 | 06 JML timing | 1.1.0 | | | | | Mock-tested |
 | 07 Role mining | 1.1.0 | | | | | Mock-tested |
-| 08 Extension attributes | 1.1.0 | | | | | Mock-tested |
-| 09 Mail and sharing | 1.1.0 | | | | | Mock-tested |
-| 10 Guests | 1.1.0 | | | | | Mock-tested |
-| 11 Azure RBAC | 1.1.0 | | | | | Mock-tested |
-| 12 Stale accounts | 1.1.0 | | | | | Mock-tested |
-| 13 Hybrid sync scope | 1.1.0 | | | | | Mock-tested |
+| 08 Extension attributes | 1.1.1 | | | | | Mock-tested |
+| 09 Mail and sharing | 1.1.1 | | | | | Mock-tested |
+| 10 Guests | 1.1.1 | | | | | Mock-tested |
+| 11 Azure RBAC | 1.1.1 | | | | | Mock-tested |
+| 12 Stale accounts | 1.1.1 | | | | | Mock-tested |
+| 13 Hybrid sync scope | 1.1.1 | | | | | Mock-tested |
 | 14 IGA reconciliation | 1.1.0 | | | | | Mock-tested |
 | 15 Rule-managed access | 1.1.0 | | | | | Mock-tested |
-| 16 Device posture | 1.1.0 | | | | | Mock-tested |
+| 16 Device posture | 1.1.1 | | | | | Mock-tested |
 | 17 AWS IAM posture | 1.1.0 | | | | | Mock-tested |
 | 18 AD delegation | 1.1.0 | | | | | Mock-tested |
 | 19 DC auth protocols | 1.1.0 | | | | | Mock-tested |
-| 20 Governance coverage | 1.1.0 | | | | | Mock-tested |
-| 21 Identity risk | 1.1.0 | | | | | Mock-tested |
-| 22 PIM role settings | 1.1.0 | | | | | Mock-tested |
+| 20 Governance coverage | 1.1.1 | | | | | Mock-tested |
+| 21 Identity risk | 1.1.1 | | | | | Mock-tested |
+| 22 PIM role settings | 1.1.1 | | | | | Mock-tested |
 | 23 AD attribute population | 1.2.0 | | | | | Mock-tested |
-| 24 CA report-only impact | 1.1.0 | | | | | Mock-tested |
+| 24 CA report-only impact | 1.1.1 | | | | | Mock-tested |
 | 25 Purview classification and DLP | 1.1.0 | | | | | Mock-tested |
 | 26 PAM vault coverage | 1.1.0 | | | | | Mock-tested |
-| 27 Identity population | 1.0.0 | | | | | Mock-tested |
-| 28 CA policy snapshot | 1.0.0 | | | | | Mock-tested |
-| 29 Pilot outcome | 1.0.0 | | | | | Mock-tested |
-| 30 Access review evidence | 1.0.0 | | | | | Mock-tested |
+| 27 Identity population | 1.0.1 | | | | | Mock-tested |
+| 28 CA policy snapshot | 1.0.1 | | | | | Mock-tested |
+| 29 Pilot outcome | 1.0.1 | | | | | Mock-tested |
+| 30 Access review evidence | 1.0.1 | | | | | Mock-tested |

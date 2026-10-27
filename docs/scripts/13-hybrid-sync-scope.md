@@ -1,6 +1,6 @@
 # 13 - Hybrid sync scope
 
-**Script:** [`13-Get-HybridSyncScope.ps1`](../../scripts/13-Get-HybridSyncScope.ps1) · **Version:** 1.1.0 · **Source:** AD + Entra
+**Script:** [`13-Get-HybridSyncScope.ps1`](../../scripts/13-Get-HybridSyncScope.ps1) · **Version:** 1.1.1 · **Source:** AD + Entra
 
 > What actually syncs from AD to Entra, where do they disagree, and which on-prem admins reach the cloud?
 
