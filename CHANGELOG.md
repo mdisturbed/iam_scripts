@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.9.1 - 2026-10-27
+
+### Fixed
+- `01-Get-MfaCoverage.ps1` 1.1.1: `signins-singlefactor-success` was always Blocked with "Bad Request". The filter uses `authenticationRequirement`, which exists only on the beta sign-in resource, so the v1.0 endpoint rejected it. The query now goes to beta (the non-interactive query already did). Rerun 01 to fill this dataset.
+
 ## 1.9.0 - 2026-10-26
 
 Gate evidence release. Closes the gaps found when the scripts were mapped to the deliverables and success criteria of a staged identity programme (baseline, pilot, staged change, operational readiness, final evidence). Everything stays read-only.

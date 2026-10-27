@@ -4,7 +4,7 @@ One page per script: what it collects, parameters, output files, permissions, pi
 
 | # | Page | Question it answers | Source | Version |
 |---|------|--------------------|--------|---------|
-| 01 | [MFA coverage](01-mfa-coverage.md) | Is MFA actually enforced everywhere, how strong is it, and who is left out? | Entra | 1.1.0 |
+| 01 | [MFA coverage](01-mfa-coverage.md) | Is MFA actually enforced everywhere, how strong is it, and who is left out? | Entra | 1.1.1 |
 | 02 | [Entra privileged access](02-entra-privileged-access.md) | Who really holds Entra admin roles, down to the account, and are those accounts well managed? | Entra | 1.1.0 |
 | 03 | [Apps and consents](03-apps-and-consents.md) | Which apps can reach our data, who owns and can use them, and are they governed? | Entra | 1.1.0 |
 | 04 | [AD privileged and service accounts](04-ad-privileged-and-service-accounts.md) | Who has admin rights on-prem (including via nesting and primary group), which accounts carry risky settings, and where are the service accounts? | AD | 1.1.0 |

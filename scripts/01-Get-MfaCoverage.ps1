@@ -36,7 +36,7 @@
     .\01-Get-MfaCoverage.ps1 -AuthMode AppCertificate -TenantId tenant-id-redacted -ClientId <app-id> -CertificateThumbprint <thumbprint>
 
 .NOTES
-    Version : 1.1.0
+    Version : 1.1.1
     Requires: PowerShell 5.1 or 7.x, module Microsoft.Graph.Authentication (only)
     Scopes  : Policy.Read.All, Directory.Read.All, AuditLog.Read.All, UserAuthenticationMethod.Read.All,
               RoleManagement.Read.Directory, PrivilegedEligibilitySchedule.Read.AzureADGroup (not with -SkipPrivilegeJoin)
@@ -65,7 +65,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '01-MfaCoverage'
-$ScriptVersion = '1.1.0'
+$ScriptVersion = '1.1.1'
 $RequiredScopes = @('Policy.Read.All', 'Directory.Read.All', 'AuditLog.Read.All', 'UserAuthenticationMethod.Read.All')
 if (-not $SkipPrivilegeJoin) { $RequiredScopes += @('RoleManagement.Read.Directory', 'PrivilegedEligibilitySchedule.Read.AzureADGroup') }
 
@@ -897,7 +897,8 @@ try {
         try {
             $since = $script:RunStartUtc.AddDays(-$SignInLookbackDays).ToString('yyyy-MM-ddTHH:mm:ssZ')
             $filter = "createdDateTime ge $since and status/errorCode eq 0 and authenticationRequirement eq 'singleFactorAuthentication'"
-            $uri = 'https://graph.microsoft.com/v1.0/auditLogs/signIns?$top=999&$filter=' + [uri]::EscapeDataString($filter)
+            # authenticationRequirement exists only on the beta signIn resource; v1.0 rejects the filter with 400 Bad Request.
+            $uri = 'https://graph.microsoft.com/beta/auditLogs/signIns?$top=999&$filter=' + [uri]::EscapeDataString($filter)
             $signIns = Invoke-GraphGetAll -Uri $uri -MaxRecords $MaxSignInRecords -Label 'signIns'
             $truncated = $script:LastQueryTruncated
             $sfRaw = $signIns.Count
@@ -918,7 +919,7 @@ try {
                     DistinctIpCount     = @($_.Group | ForEach-Object { $_.ipAddress } | Sort-Object -Unique).Count
                 }
             }
-            $note = "Lookback $SignInLookbackDays days; $sfRaw raw interactive sign-ins aggregated"
+            $note = "Lookback $SignInLookbackDays days; $sfRaw raw interactive sign-ins aggregated (beta endpoint: authenticationRequirement is not in v1.0)"
             if ($truncated) { $note += "; TRUNCATED at $MaxSignInRecords - rerun with a shorter lookback or higher cap" }
             Export-Dataset -Name 'signins-singlefactor-success' -Rows $sfRows -Note $note
         }

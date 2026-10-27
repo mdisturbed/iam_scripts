@@ -136,7 +136,7 @@ When a script is pilot-verified, hand it over with:
 
 | Script | Version | Pilot date | Run by | Known-answer checks passed | Tuned parameters | Status |
 |--------|---------|-----------|--------|----------------------------|------------------|--------|
-| 01 MFA coverage | 1.1.0 | | | | | Mock-tested |
+| 01 MFA coverage | 1.1.1 | | | | | Mock-tested |
 | 02 Privileged access | 1.1.0 | | | | | Mock-tested |
 | 03 Apps and consents | 1.1.0 | | | | | Mock-tested |
 | 04 AD privileged / service accounts | 1.1.0 | | | | | Mock-tested |

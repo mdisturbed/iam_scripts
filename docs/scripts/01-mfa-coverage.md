@@ -1,6 +1,6 @@
 # 01 - MFA coverage
 
-**Script:** [`01-Get-MfaCoverage.ps1`](../../scripts/01-Get-MfaCoverage.ps1) · **Version:** 1.1.0 · **Source:** Entra
+**Script:** [`01-Get-MfaCoverage.ps1`](../../scripts/01-Get-MfaCoverage.ps1) · **Version:** 1.1.1 · **Source:** Entra
 
 > Is MFA actually enforced everywhere, how strong is it, and who is left out?
 
@@ -11,7 +11,7 @@ Measures whether MFA is actually enforced, not just registered, how strong the r
 - One row per exclusion, the transitive members of excluded groups, and the accounts that hold excluded roles (from the effective privileged set: direct, group, eligible, PIM for Groups, group owners).
 - MFA registration for every user (registered vs capable, method strength, phishing-resistant, SMS/voice, phone-only, email-only), joined to account enabled / synced state and to privilege (`IsPrivileged`, `IsTier0`).
 - The authentication methods policy (which methods are on and for whom), the registration campaign, policy migration state and security defaults.
-- Successful single-factor sign-ins over a lookback window, with legacy authentication flagged; optionally non-interactive single-factor sign-ins.
+- Successful single-factor sign-ins over a lookback window, with legacy authentication flagged (read from the beta sign-in endpoint, because `authenticationRequirement` exists only there); optionally non-interactive single-factor sign-ins.
 
 | Parameter | Default | Purpose |
 |-----------|---------|---------|
