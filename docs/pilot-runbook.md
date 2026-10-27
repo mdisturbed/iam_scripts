@@ -26,6 +26,7 @@ Every script starts at **Mock-tested**. Record progress in the sign-off table at
 
 Start with the scripts that need the least setup and give the clearest known answers:
 
+1. **31** licence inventory, first and before the project starts: it confirms which licences and service plans exist, so later `EvidenceUnavailable` statuses can be read against it. Rerun it with `-EvidenceRoot` after the pass to list every licence-dependent gap
 1. **02** Entra privileged access, **01** MFA coverage
 2. **04** AD privileged accounts, **05** AD group nesting
 3. **03** apps and consents, **10** guests, **12** stale accounts, **13** sync scope
@@ -82,6 +83,7 @@ Pick one or two facts per script that you can confirm independently in the porta
 | 28 CA policy snapshot | `ca-policies.csv` state counts match the Conditional Access policy list in the Entra portal; a snapshot taken twice with no change in between shows every policy `Unchanged` |
 | 29 Pilot outcome | One test case's evidence sign-in (`CorrelationId`) opens in the Entra sign-in log and its Conditional Access tab shows the same result |
 | 30 Access review evidence | One completed review's decision counts match **Identity Governance > Access reviews > (review) > Results**; one known deny shows its apply result |
+| 31 Licence inventory | SKU counts (`Enabled`, `Consumed`) match **Microsoft 365 admin center > Billing > Licenses** for each product; one capability you know is licensed shows `Present = True` |
 
 ## Tuning on first run
 
@@ -110,6 +112,7 @@ Expect to adjust these on the first run and record the values used. They're writ
 | 28 | `-ResolveNames $false` if name lookups are slow or not permitted |
 | 29 | `-LookbackHours`, `NotBeforeUtc` per case so only sign-ins after the change count |
 | 30 | `-SinceDays`, `-DefinitionNameLike` to the reviews in scope |
+| 31 | `-CapabilityMap` if the readiness gate needs capabilities the default map doesn't cover |
 | 14 | Column names, `-SystemName`, status value lists |
 
 ## Reporting a problem
@@ -166,3 +169,4 @@ When a script is pilot-verified, hand it over with:
 | 28 CA policy snapshot | 1.0.1 | | | | | Mock-tested |
 | 29 Pilot outcome | 1.0.1 | | | | | Mock-tested |
 | 30 Access review evidence | 1.0.1 | | | | | Mock-tested |
+| 31 Licence inventory | 1.0.0 | | | | | Mock-tested |

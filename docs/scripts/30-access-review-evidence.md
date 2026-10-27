@@ -83,4 +83,4 @@ General issues: [troubleshooting](../troubleshooting.md).
 
 ---
 
-[← 29 Pilot outcome](29-pilot-outcome.md) · [All scripts](README.md)
+[← 29 Pilot outcome](29-pilot-outcome.md) · [All scripts](README.md) · [31 Licence inventory →](31-licence-inventory.md)

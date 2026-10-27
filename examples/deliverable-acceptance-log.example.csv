@@ -1,0 +1,4 @@
+DeliverableId,Deliverable,Gate,Version,SubmittedOnUtc,SubmittedTo,ReviewDueUtc,Decision,DecisionOnUtc,DecisionBy,CommentsReceived,CommentsAddressedOnUtc,ResubmittedOnUtc,EvidencePackage,Notes
+D01,Integrated project plan and governance pack,G1,1.0,2026-11-16T00:00:00Z,Role1,2026-11-23T00:00:00Z,Pending,,,,,,,ReviewDueUtc = submitted + 5 business days unless another period is agreed
+D02,Identity baseline and gap assessment,G1,1.0,2026-11-16T00:00:00Z,Role1,2026-11-23T00:00:00Z,CommentsReceived,2026-11-20T00:00:00Z,Role1,3 comments; see review notes,2026-11-24T00:00:00Z,2026-11-24T00:00:00Z,New-EvidencePackage\20261116-150000Z,
+D03,Prioritized backlog,G1,1.0,2026-11-16T00:00:00Z,Role1,2026-11-23T00:00:00Z,DeemedAccepted,2026-11-23T00:00:00Z,,,,,,No written rejection by the review due date

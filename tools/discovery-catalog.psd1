@@ -42,5 +42,6 @@
         @{ Number = '28'; Title = 'CA policy snapshot';                   Area = 'Entra';      Needs = @('Graph'); Note = 'Take one before every Conditional Access change; pass it as -BaselineRunFolder afterwards.' }
         @{ Number = '29'; Title = 'Pilot outcome';                        Area = 'Entra';      Needs = @('Graph', 'InputFile'); Note = 'Needs a test-case file. Run after the test users have signed in.' }
         @{ Number = '30'; Title = 'Access review evidence';               Area = 'Entra';      Needs = @('Graph') }
+        @{ Number = '31'; Title = 'Licence inventory';                    Area = 'Entra';      Needs = @('Graph'); Note = 'Run first to confirm licences; rerun with -EvidenceRoot after the pass to list licence-dependent gaps.' }
     )
 }

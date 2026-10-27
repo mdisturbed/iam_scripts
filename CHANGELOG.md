@@ -2,6 +2,18 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.9.3 - 2026-10-27
+
+Readiness and acceptance evidence, mapped from the SOW acceptance criteria and assumptions.
+
+### Added
+- `31-Get-LicenceInventory.ps1` (1.0.0): subscribed SKUs (enabled, suspended, warning, assigned, available), every service plan with its provisioning status, and a capability check (Entra ID P1 / P2, ID Governance, Workload Identities, Intune, Defender for Identity and Office 365, Purview information protection, DLP, insider risk and communication compliance, Exchange, SharePoint) using plan names from Microsoft's service plan reference. With `-EvidenceRoot`, lists every dataset in the latest runs that came back EvidenceUnavailable. Signs in with `Directory.Read.All` by default; `-GraphScope LicenseAssignment.Read.All` is the least-privileged option.
+- `examples/readiness-checklist.example.csv`: the ten pre-project prerequisites, each closed with evidence or formally waived (reason, approver, date).
+- `examples/deliverable-acceptance-log.example.csv`: submission, review due date (5 business days by default), decision (Accepted, CommentsReceived, DeemedAccepted), comments and resubmission.
+
+### Changed
+- `examples/status-register.example.csv`: columns now match the acceptance criteria for blocked and deferred items: `EvidenceState`, `Rationale`, `Owner`, `Risk`, `Disposition`, `RecommendedFollowOn` (replacing `Status`, `StatusReason`, `TargetTreatment`).
+
 ## 1.9.2 - 2026-10-27
 
 ### Fixed

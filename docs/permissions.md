@@ -36,6 +36,7 @@ Everything here is read-only. Ask for the narrowest option that works and, where
 | 28 CA policy snapshot | Global Reader or Security Reader | Policy.Read.All (+ Directory.Read.All, Application.Read.All to resolve names) | An earlier 28 run folder for `-BaselineRunFolder` | Graph Auth |
 | 29 Pilot outcome | Global Reader or Security Reader | AuditLog.Read.All, Policy.Read.All, Directory.Read.All (+ GroupMember.Read.All with `-PilotGroupId`) | Test-case file | Graph Auth |
 | 30 Access review evidence | Global Reader | AccessReview.Read.All, Directory.Read.All, RoleManagement.Read.Directory, PrivilegedEligibilitySchedule.Read.AzureADGroup | | Graph Auth |
+| 31 Licence inventory | Global Reader or Directory Readers | Directory.Read.All by default; LicenseAssignment.Read.All or Organization.Read.All with `-GraphScope` | Read access to the evidence folder for `-EvidenceRoot` | Graph Auth |
 | Tools: Compare-RunFolders, Get-KpiSummary, New-EvidencePackage | | | Read access to the evidence folder; write access to their own output folder | none |
 
 Items in brackets apply only when the matching optional switch is used.
@@ -55,12 +56,13 @@ All scopes used anywhere in the repository:
 
 | Scope | Used by |
 |-------|---------|
-| `Directory.Read.All` | 01, 02, 03, 08, 10, 11, 16, 20, 21, 22, 24, 28, 29, 30 |
+| `Directory.Read.All` | 01, 02, 03, 08, 10, 11, 16, 20, 21, 22, 24, 28, 29, 30, 31 |
 | `User.Read.All` | 06, 10, 12, 13, 27 |
 | `Group.Read.All` | 13, 20 |
 | `GroupMember.Read.All` | 12, 13, 20, 29 (`-PilotGroupId` only) |
 | `Application.Read.All` | 03, 08, 20, 28 |
-| `Organization.Read.All` | 13 |
+| `Organization.Read.All` | 13; 31 with `-GraphScope Organization.Read.All` |
+| `LicenseAssignment.Read.All` | 31 with `-GraphScope LicenseAssignment.Read.All` (least privileged) |
 | `Policy.Read.All` | 01, 02 (`-BreakGlassUpns` only), 03, 08, 10, 16, 21, 22, 24, 28, 29 |
 | `AuditLog.Read.All` | 01, 02, 03, 06, 10, 12, 21, 24, 29 |
 | `UserAuthenticationMethod.Read.All` | 01, 02 |

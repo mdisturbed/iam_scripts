@@ -1,0 +1,11 @@
+PrereqId,Prerequisite,WhatClosesIt,Status,Evidence,EvidenceRunFolder,Owner,DueDateUtc,WaiverReason,WaivedBy,WaivedOnUtc,Risk,LastUpdatedUtc
+PR-01,Configuration freeze communicated,Freeze notice sent to change owners with start date and scope,Open,,,Role1,2026-11-02T00:00:00Z,,,,,2026-10-27T00:00:00Z
+PR-02,Baseline snapshots taken,Full read-only baseline run; Conditional Access snapshot (28) kept as the pre-change baseline,Closed,Run folders with SHA-256 manifests,28-CaPolicySnapshot\20261026-140000Z,Role2,,,,,,2026-10-27T00:00:00Z
+PR-03,Least-privilege access granted,Reader roles and read-only Graph scopes in place; write access not used,Closed,Run manifests record roles and scopes,,Role2,,,,,,2026-10-27T00:00:00Z
+PR-04,Stakeholders assigned,Named owners for each workstream and decision,Open,,,Role1,2026-11-02T00:00:00Z,,,,,2026-10-27T00:00:00Z
+PR-05,CAB alignment,Change windows and lead times agreed,Open,,,Role1,2026-11-02T00:00:00Z,,,,,2026-10-27T00:00:00Z
+PR-06,Evidence repository provisioned,Restricted evidence location created and access granted,Open,,,Role1,2026-11-02T00:00:00Z,,,,,2026-10-27T00:00:00Z
+PR-07,Licences confirmed,Licence inventory (31) for the directory; written confirmation from each other platform owner,Open,,31-LicenceInventory\<run>,Role2,2026-11-02T00:00:00Z,,,,,2026-10-27T00:00:00Z
+PR-08,Evidence intake in place,Evidence intake log produced (New-EvidencePackage),Open,,,Role2,2026-11-02T00:00:00Z,,,,,2026-10-27T00:00:00Z
+PR-09,Platform direction confirmed,Decision recorded on the target identity and governance platforms,Open,,,Role1,2026-11-02T00:00:00Z,,,,,2026-10-27T00:00:00Z
+PR-10,Kickoff scheduled,Kickoff meeting booked with agenda sent,Open,,,Role1,2026-11-02T00:00:00Z,,,,,2026-10-27T00:00:00Z

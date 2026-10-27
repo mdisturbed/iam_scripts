@@ -47,6 +47,7 @@ If installs are blocked, Azure Cloud Shell in the tenant includes the Graph, Exc
 | **Event Log Readers** on domain controllers | 19 |
 | Entra ID P1 | Sign-in activity (01, 02, 03, 06, 10, 12) |
 | Entra ID P2 / ID Governance | PIM eligibility (02, 11), access reviews (20), risk data (21), PIM settings (22) |
+| Entra **Global Reader** or **Directory Readers** (no licence needed) | 31, which confirms which licences the tenant has |
 
 Scope-by-scope detail is in [permissions.md](permissions.md). Missing access doesn't crash a script; the affected dataset is marked `Blocked` or `EvidenceUnavailable`.
 
@@ -112,12 +113,13 @@ Every script with typical parameters. Point `-OutputRoot` at the approved eviden
 .\scripts\25-Get-PurviewClassification.ps1    -IncludeContentExplorer -OutputRoot D:\Evidence
 .\scripts\26-Compare-PamVaultCoverage.ps1     -PamExportCsv .\pam-accounts.csv -OutputRoot D:\Evidence
 
-# 7b. Identity population, Conditional Access change evidence, access-review evidence
+# 7b. Identity population, Conditional Access change evidence, access-review evidence, licence inventory
 .\scripts\27-Get-IdentityPopulation.ps1    -Server dc01.contoso.local -HrCsvPath .\hr-export.csv -ExclusionsCsv .\population-exclusions.csv -BreakGlassUpns bg1@contoso.com -OutputRoot D:\Evidence
 .\scripts\28-Export-CaPolicySnapshot.ps1   -OutputRoot D:\Evidence                                         # before a CA change
 .\scripts\28-Export-CaPolicySnapshot.ps1   -BaselineRunFolder D:\Evidence\28-CaPolicySnapshot\<run> -OutputRoot D:\Evidence   # after change or rollback
 .\scripts\29-Test-PilotOutcome.ps1         -TestCaseCsv .\pilot-test-cases.csv -PilotGroupId 00000000-0000-0000-0000-000000000001 -CheckScopeLeak -OutputRoot D:\Evidence
 .\scripts\30-Get-AccessReviewEvidence.ps1  -SinceDays 180 -OutputRoot D:\Evidence
+.\scripts\31-Get-LicenceInventory.ps1      -EvidenceRoot D:\Evidence -OutputRoot D:\Evidence   # licence confirmation; run first, and again after the pass
 
 # 7. AWS (credential profile, or a read-only role in every account)
 .\scripts\17-Get-AwsIamPosture.ps1 -ProfileName audit -AllOrganizationAccounts -AssumeRoleName IAMDiscoveryReadOnly -IncludeIdentityCenter -OutputRoot D:\Evidence

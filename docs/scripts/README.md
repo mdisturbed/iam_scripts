@@ -34,5 +34,6 @@ One page per script: what it collects, parameters, output files, permissions, pi
 | 28 | [CA policy snapshot](28-ca-policy-snapshot.md) | What exactly is the Conditional Access configuration right now, and what changed since the last snapshot? | Entra | 1.0.1 |
 | 29 | [Pilot outcome](29-pilot-outcome.md) | Did each pilot test case, expected and adverse, give the result it should, and which sign-in proves it? | Entra sign-in logs + test-case file | 1.0.1 |
 | 30 | [Access review evidence](30-access-review-evidence.md) | For each access review that ran, who reviewed what, what did they decide and why, and were removals applied? | Entra ID Governance | 1.0.1 |
+| 31 | [Licence inventory](31-licence-inventory.md) | Which Microsoft licences and service plans does the tenant actually have, how many are assigned, and which licence-dependent evidence could not be collected? | Entra (+ evidence folder) | 1.0.0 |
 
 [← Back to README](../../README.md)

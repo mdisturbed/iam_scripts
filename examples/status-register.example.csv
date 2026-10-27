@@ -1,5 +1,5 @@
-ItemId,Deliverable,Gate,Item,Status,StatusReason,Owner,TargetTreatment,TargetDateUtc,Dependency,EvidenceRunFolder,LastUpdatedUtc
-ST-001,Identity baseline and gap assessment,G1,MFA coverage of human workforce,Completed,,Role1,,,,01-MfaCoverage\20261029-150000Z,2026-10-29T15:00:00Z
-ST-002,Identity baseline and gap assessment,G1,Azure role holders,Blocked,Reader access at root management group not granted,Role1,Request access through change process,2026-11-06T00:00:00Z,Access request REQ0000000,,2026-10-29T15:00:00Z
-ST-003,PAM quick-win baseline,G2,Vault coverage of AWS admins,Deferred,AWS read-only role scheduled for phase 2,Role3,Run 17 then 26 when the role exists,2027-01-15T00:00:00Z,AWS read-only role,,2026-10-29T15:00:00Z
-ST-004,Identity baseline and gap assessment,G1,Risky user detections,EvidenceUnavailable,Tenant has no Entra ID P2 licence,Role1,Record as licence gap; no remediation in scope,,,21-IdentityRisk\20261029-151500Z,2026-10-29T15:15:00Z
+ItemId,Deliverable,Gate,Item,EvidenceState,Rationale,Owner,Risk,Disposition,RecommendedFollowOn,TargetDateUtc,Dependency,EvidenceRunFolder,LastUpdatedUtc
+ST-001,Identity baseline and gap assessment,G1,MFA coverage of human workforce,Completed,,Role1,,,,,,01-MfaCoverage\20261029-150000Z,2026-10-29T15:00:00Z
+ST-002,Identity baseline and gap assessment,G1,Azure role holders,Blocked,Reader access at root management group not granted,Role1,Medium: Azure privileged access not yet measured,Pending access,Request access through change process; rerun 11 and 26,2026-11-06T00:00:00Z,Access request REQ0000000,,2026-10-29T15:00:00Z
+ST-003,PAM quick-win baseline,G2,Vault coverage of AWS admins,Deferred,AWS read-only role scheduled for phase 2,Role3,Medium: AWS admin vaulting unverified,Deferred to phase 2,Run 17 then 26 when the role exists,2027-01-15T00:00:00Z,AWS read-only role,,2026-10-29T15:00:00Z
+ST-004,Identity baseline and gap assessment,G1,Risky user detections,EvidenceUnavailable,Tenant has no Entra ID P2 licence,Role1,Low: risk-based policies cannot be used,Risk accepted,Record as licence gap; no remediation in scope,,,21-IdentityRisk\20261029-151500Z,2026-10-29T15:15:00Z

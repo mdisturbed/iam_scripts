@@ -56,6 +56,7 @@ Each links to its page: what it collects, parameters, output files, permissions,
 | 28 | [CA policy snapshot](docs/scripts/28-ca-policy-snapshot.md) | What exactly is the Conditional Access configuration right now, and what changed since the last snapshot? The baseline and rollback proof for a change | Entra |
 | 29 | [Pilot outcome](docs/scripts/29-pilot-outcome.md) | Did each pilot test case, expected and adverse, give the result it should, and which sign-in proves it? | Entra sign-in logs + test-case file |
 | 30 | [Access review evidence](docs/scripts/30-access-review-evidence.md) | For each access review that ran, who reviewed what, what did they decide and why, and were removals applied? | Entra ID Governance |
+| 31 | [Licence inventory](docs/scripts/31-licence-inventory.md) | Which Microsoft licences and service plans does the tenant actually have, how many are assigned, and which licence-dependent evidence could not be collected? | Entra (+ evidence folder) |
 
 The scripts gather facts. They do not score maturity or recommend fixes; that interpretation belongs in the analysis that uses the evidence.
 
@@ -126,6 +127,7 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 | KPI denominators | 27 |
 | Conditional Access change: baseline, pilot, rollback | 28, 24, 29, then 28 with `-BaselineRunFolder` |
 | Access-review evidence | 20, 30 |
+| Licence confirmation for a readiness gate | 31 (with `-EvidenceRoot` after the other runs) |
 
 1. Run `Test-ReadOnly.ps1` and share the result with whoever approves the run.
 2. Pilot each script yourself using the [pilot runbook](docs/pilot-runbook.md).
@@ -144,7 +146,7 @@ For work that moves through gates (baseline, pilot, staged change, operational h
 | Before / after evidence for an approved change | `tools/Compare-RunFolders.ps1` |
 | KPIs with validated denominators | `tools/Get-KpiSummary.ps1` with a [KPI definition file](examples/kpi-definitions.example.psd1) |
 | Evidence intake log and per-deliverable status | `tools/New-EvidencePackage.ps1` with a [deliverable map](examples/deliverable-map.example.psd1) |
-| Exceptions, status, ownership, runbooks | [Registers and templates](docs/templates/README.md) |
+| Readiness prerequisites, exceptions, status, acceptance, ownership, runbooks | [Registers and templates](docs/templates/README.md) |
 
 > **Contributing?** Read [CONTRIBUTING.md](CONTRIBUTING.md) and run `.\tools\guardrail\Install-Guardrail.ps1` once after cloning. See [Guardrail](docs/guardrail.md).
 
@@ -176,7 +178,7 @@ iam_scripts/
 ├── .gitignore                    blocks evidence, keys and data exports from being committed
 ├── .githooks/                    pre-commit and commit-msg guardrail hooks
 ├── .github/workflows/            guardrail CI on every push (backstop for the hooks)
-├── scripts/                      the thirty discovery scripts (self-contained, run independently)
+├── scripts/                      the thirty-one discovery scripts (self-contained, run independently)
 ├── tools/
 │   ├── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
 │   ├── Start-Discovery.ps1       launcher: readiness check, pick list, runs scripts, run summary
@@ -194,7 +196,7 @@ iam_scripts/
 │   ├── pilot-test-cases.example.csv           input for 29
 │   ├── kpi-definitions.example.psd1           input for Get-KpiSummary
 │   ├── deliverable-map.example.psd1           input for New-EvidencePackage
-│   └── exception / status register, ownership matrix
+│   └── readiness checklist, exception / status register, acceptance log, ownership matrix
 └── docs/
     ├── getting-started.md        modules, access, sign-in, common parameters, locked-down hosts
     ├── scripts/                  one page per script: parameters, outputs, permissions, pilot check

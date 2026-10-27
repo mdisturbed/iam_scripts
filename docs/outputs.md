@@ -73,6 +73,7 @@ The CSVs contain identity data (names, UPNs, sign-in activity, group membership,
 - [28 CA policy snapshot](scripts/28-ca-policy-snapshot.md#output): `ca-policies.json`, `ca-policies.csv`, `named-locations.json`, `named-locations.csv`, `authentication-strengths.json`, `authentication-strengths.csv`, `authentication-methods-policy.json`, `security-defaults.json`; with `-BaselineRunFolder`: `ca-policy-drift.csv`, `named-location-drift.csv`, `authentication-strength-drift.csv`, `auth-methods-drift.csv`
 - [29 Pilot outcome](scripts/29-pilot-outcome.md#output): `pilot-test-results.csv`, `pilot-signin-evidence.csv`, `pilot-scope-check.csv`, `pilot-scope-leak.csv`
 - [30 Access review evidence](scripts/30-access-review-evidence.md#output): `review-instances.csv`, `review-decisions.csv`, `review-exceptions.csv`
+- [31 Licence inventory](scripts/31-licence-inventory.md#output): `licence-skus.csv`, `licence-service-plans.csv`, `licence-capabilities.csv`; with `-EvidenceRoot`: `licence-gaps-observed.csv`
 - [Evidence tools](evidence-tools.md): Compare-RunFolders `run-diff-summary.csv`, `run-diff-rows.csv`, `metric-diff.csv`, `input-verification.csv`; Get-KpiSummary `kpi-summary.csv`; New-EvidencePackage `evidence-intake-log.csv`, `evidence-datasets.csv`, `deliverable-status.csv`, `evidence-index.md`, `package-manifest.csv`
 
 [← Back to README](../README.md)
