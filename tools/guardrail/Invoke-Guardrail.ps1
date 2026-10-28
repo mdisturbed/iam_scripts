@@ -15,6 +15,12 @@
       tools/guardrail/denylist.local.txt   one .NET regex per line, case-insensitive, # for comments
       $env:GUARDRAIL_DENYLIST              same format, newline separated (CI: repo secret of the same name)
 
+    Pinned binaries: a blocked file type (for example the findings review template .xlsx) is allowed only when
+    tools/guardrail/allowed-binaries.txt lists its path with the SHA-256 of its exact content:
+      <sha256>  <path relative to the repo root>  # reason
+    Any change to such a file fails until the hash in that list is updated on purpose. The file is not scanned
+    line by line (it is binary), so check its content before pinning it (docs/guardrail.md).
+
     False positive: add  guardrail:allow  and a reason on the same line, e.g.
       $version = '10.0.17763.1'   # guardrail:allow OS build number, not an IP
     Every allow is visible in review; do not use it to keep a real value.
@@ -28,7 +34,10 @@
 param(
     [ValidateSet('Staged', 'All', 'Files')]
     [string]$Mode = 'Staged',
-    [string[]]$Path = @()
+    [string[]]$Path = @(),
+    # For the self-test: a different pinned-binaries list, and the folder its relative paths start from (Files mode)
+    [string]$AllowedBinariesPath = '',
+    [string]$RootPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,6 +67,35 @@ try {
     $knownFile = Join-Path $here 'known-public-ids.txt'
     if (Test-Path $knownFile) {
         foreach ($l in Get-Content $knownFile) { if ($l -match '^\s*([0-9a-fA-F-]{36})\b') { $knownIds[$Matches[1].ToLower()] = $true } }
+    }
+
+    # ---- pinned binaries: blocked file types allowed only at an exact SHA-256 ----
+    if (-not $AllowedBinariesPath) { $AllowedBinariesPath = Join-Path $here $(if ($config.PinnedBinariesFile) { $config.PinnedBinariesFile } else { 'allowed-binaries.txt' }) }
+    if (-not $RootPath) { $RootPath = $repoRoot }
+    $RootPath = [IO.Path]::GetFullPath($RootPath).TrimEnd('\', '/')
+    $pinned = @{}
+    if (Test-Path -LiteralPath $AllowedBinariesPath) {
+        foreach ($l in Get-Content -LiteralPath $AllowedBinariesPath) {
+            $t = ($l -replace '#.*$', '').Trim()
+            if (-not $t) { continue }
+            if ($t -notmatch '^([0-9a-fA-F]{64})\s+(\S+)$') { throw "allowed-binaries.txt: cannot read line '$l' (expected: <sha256>  <relative path>  # reason)" }
+            $pinned[($Matches[2] -replace '\\', '/').ToLowerInvariant()] = $Matches[1].ToUpperInvariant()
+        }
+    }
+    function Get-Sha256OfBytes([byte[]]$bytes) {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { return ([BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-', '') } finally { $sha.Dispose() }
+    }
+    function Get-StagedBlobBytes([string]$spec) {
+        # Raw bytes of a staged blob (piping native output through PowerShell would corrupt binary content)
+        $psi = [Diagnostics.ProcessStartInfo]::new('git', "cat-file blob `"$spec`"")
+        $psi.RedirectStandardOutput = $true; $psi.UseShellExecute = $false; $psi.WorkingDirectory = $repoRoot
+        $proc = [Diagnostics.Process]::Start($psi)
+        $ms = [IO.MemoryStream]::new()
+        $proc.StandardOutput.BaseStream.CopyTo($ms)
+        $proc.WaitForExit()
+        if ($proc.ExitCode -ne 0) { throw "git cat-file $spec failed" }
+        return $ms.ToArray()
     }
 
     # ---- private denylist: local file + CI secret ----
@@ -90,14 +128,19 @@ try {
         'Staged' {
             $names = & git diff --cached --name-only --diff-filter=ACMR
             if ($LASTEXITCODE -ne 0) { throw 'git diff --cached failed' }
-            foreach ($n in $names) { if ($n) { Add-GitBlob $n ":$n" } }
+            foreach ($n in $names) {
+                if (-not $n) { continue }
+                Add-GitBlob $n ":$n"
+                if ($pinned.ContainsKey($n.ToLowerInvariant())) { $items[$items.Count - 1] | Add-Member -NotePropertyName Sha256 -NotePropertyValue (Get-Sha256OfBytes (Get-StagedBlobBytes ":$n")) }
+            }
         }
         'All' {
             $names = & git ls-files
             if ($LASTEXITCODE -ne 0) { throw 'git ls-files failed' }
             foreach ($n in $names) {
                 if ($n -and (Test-Path -LiteralPath $n)) {
-                    $items.Add([pscustomobject]@{ Name = $n; Text = [IO.File]::ReadAllText((Join-Path $repoRoot $n)); Bytes = ([IO.FileInfo](Join-Path $repoRoot $n)).Length })
+                    $full = Join-Path $repoRoot $n
+                    $items.Add([pscustomobject]@{ Name = $n; Text = [IO.File]::ReadAllText($full); Bytes = ([IO.FileInfo]$full).Length; Sha256 = $(if ($pinned.ContainsKey($n.ToLowerInvariant())) { Get-Sha256OfBytes ([IO.File]::ReadAllBytes($full)) } else { $null }) })
                 }
             }
             $hasCommits = $null -ne (& git rev-parse --verify --quiet HEAD)
@@ -118,7 +161,9 @@ try {
         'Files' {
             foreach ($p in $Path) {
                 $full = (Resolve-Path -LiteralPath $p).Path
-                $items.Add([pscustomobject]@{ Name = $p; Text = [IO.File]::ReadAllText($full); Bytes = ([IO.FileInfo]$full).Length })
+                $rel = $null
+                if ($full.StartsWith($RootPath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or $full.StartsWith($RootPath + '/', [StringComparison]::OrdinalIgnoreCase)) { $rel = $full.Substring($RootPath.Length + 1) -replace '\\', '/' }
+                $items.Add([pscustomobject]@{ Name = $p; Rel = $rel; Text = [IO.File]::ReadAllText($full); Bytes = ([IO.FileInfo]$full).Length; Sha256 = $(if ($rel -and $pinned.ContainsKey($rel.ToLowerInvariant())) { Get-Sha256OfBytes ([IO.File]::ReadAllBytes($full)) } else { $null }) })
             }
         }
     }
@@ -129,6 +174,12 @@ try {
     foreach ($item in $items) {
         $isCommit = $item.Name -like 'commit *'
         if (-not $isCommit) {
+            $relName = $(if ($item.PSObject.Properties['Rel']) { $item.Rel } else { $item.Name -replace '\\', '/' })
+            if ($relName -and $pinned.ContainsKey($relName.ToLowerInvariant())) {
+                $want = $pinned[$relName.ToLowerInvariant()]
+                if ($item.Sha256 -and $item.Sha256 -eq $want) { continue }   # pinned binary at its approved content
+                $findings.Add([pscustomobject]@{ File = $item.Name; Line = 0; Rule = 'pinned-binary-changed'; Value = "content does not match the SHA-256 in allowed-binaries.txt; check it, then update the hash on purpose" }); continue
+            }
             $ext = [IO.Path]::GetExtension($item.Name).ToLower()
             $nameAllowed = @($config.AllowedNamePatterns | Where-Object { ($item.Name -replace '\\', '/') -match $_ }).Count -gt 0
             if (-not $nameAllowed -and $config.BlockedExtensions -contains $ext) {

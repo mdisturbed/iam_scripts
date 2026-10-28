@@ -1,0 +1,6 @@
+# Binary files allowed in this repo, each pinned to the SHA-256 of its exact content.
+# Format: <sha256>  <path relative to the repo root>  # reason
+# A file listed here is not scanned line by line (it is binary). Before pinning or re-pinning one, check its
+# content holds no data (unzip an .xlsx and search the XML), then update the hash in the same change.
+# Any other change to a listed file fails the guardrail until its hash here is updated on purpose.
+6114e6a2b464c0fa99b59848eddd150e5d3b0118c0c345603cacde55be1f8922  templates/findings-review.template.xlsx  # blank findings review workbook built by tools/build_findings_review.py; no data

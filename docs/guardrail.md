@@ -31,6 +31,14 @@ Rules live in [`tools/guardrail/rules.psd1`](../tools/guardrail/rules.psd1).
   - binaries, and anything over 1 MB
 
   Only `examples/*.example.csv` is allowed, and its contents are still scanned.
+- **Pinned binaries**: the one exception to the file-type rule is a binary listed in
+  [`tools/guardrail/allowed-binaries.txt`](../tools/guardrail/allowed-binaries.txt) with the SHA-256 of its exact
+  content (today only `templates/findings-review.template.xlsx`). Any other content at that path fails as
+  `pinned-binary-changed`, and the same file type anywhere else still fails as `blocked-file-type`. A pinned file
+  can't be scanned line by line, so before pinning or re-pinning one:
+  1. Unzip it and search its XML for anything identifying.
+  2. Update the hash in the same commit.
+  3. Run the self-test.
 - **Your private denylist**: org names, hostnames, group prefixes and people. The generic rules can't know these.
 
 Microsoft-published IDs that are the same in every tenant (built-in role template IDs, guest access levels,
@@ -107,6 +115,9 @@ Something identifying reached GitHub. Even in a private repo, it stays in histor
 .\tools\guardrail\Invoke-Guardrail.ps1 -Mode All       # whole repo + commit messages and authors
 .\tools\guardrail\Test-Guardrail.ps1                   # self-test: every rule fires, placeholders pass
 ```
+
+To pin a changed template: rebuild it, check its content, then put its new SHA-256 in `allowed-binaries.txt`
+(`<sha256>  <relative path>  # reason`) in the same commit.
 
 To add a rule:
 1. Add it to `rules.psd1`.

@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
     Self-test for the guardrail: plants one bad value per rule in a temp folder and confirms each is caught,
-    then confirms a file full of approved placeholders passes. Runs in CI on every push.
+    then confirms a file full of approved placeholders passes, and that a pinned binary (allowed-binaries.txt)
+    passes only at its listed SHA-256. Runs in CI on every push.
     Bad samples are built by joining fragments so this file itself never contains a real-looking value.
 .EXAMPLE
     pwsh tools/guardrail/Test-Guardrail.ps1
@@ -71,6 +72,31 @@ try {
         if ($LASTEXITCODE -eq 1 -and $out -match [regex]::Escape($rule)) { Write-Host "  caught   $rule" -ForegroundColor Green }
         else { Write-Host "  MISSED   $rule (exit $LASTEXITCODE)`n$out" -ForegroundColor Red; $failures++ }
     }
+    # ---- pinned binaries (allowed-binaries.txt): exact content passes, changed content or an unlisted binary fails ----
+    $root = Join-Path $tmp 'pinroot'; New-Item -ItemType Directory -Path (Join-Path $root 'templates') -Force | Out-Null
+    $pinnedFile = Join-Path (Join-Path $root 'templates') 'sample.template.xlsx'
+    [IO.File]::WriteAllBytes($pinnedFile, [byte[]](0x50, 0x4B, 0x03, 0x04, 0x00, 0x01, 0x02, 0x03))
+    $sha = (Get-FileHash -LiteralPath $pinnedFile -Algorithm SHA256).Hash
+    $list = Join-Path $tmp 'allowed-binaries.txt'
+    Set-Content -Path $list -Value @('# test list', "$sha  templates/sample.template.xlsx  # self-test")
+    $pinArgs = @('-NoProfile', '-File', $scanner, '-Mode', 'Files', '-AllowedBinariesPath', $list, '-RootPath', $root, '-Path')
+    $out = & $psExe @pinArgs $pinnedFile 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 0) { Write-Host '  passed   pinned binary at its listed SHA-256' -ForegroundColor Green }
+    else { Write-Host "  FALSE POSITIVE on pinned binary (exit $LASTEXITCODE)`n$out" -ForegroundColor Red; $failures++ }
+    [IO.File]::WriteAllBytes($pinnedFile, [byte[]](0x50, 0x4B, 0x03, 0x04, 0x00, 0x01, 0x02, 0x04))
+    $out = & $psExe @pinArgs $pinnedFile 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 1 -and $out -match 'pinned-binary-changed') { Write-Host '  caught   pinned-binary-changed (same path, different content)' -ForegroundColor Green }
+    else { Write-Host "  MISSED   pinned-binary-changed (exit $LASTEXITCODE)`n$out" -ForegroundColor Red; $failures++ }
+    $unlisted = Join-Path (Join-Path $root 'templates') 'other.xlsx'
+    [IO.File]::WriteAllBytes($unlisted, [byte[]](0x50, 0x4B, 0x03, 0x04, 0x00, 0x01, 0x02, 0x03))
+    $out = & $psExe @pinArgs $unlisted 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 1 -and $out -match 'blocked-file-type') { Write-Host '  caught   blocked-file-type (unlisted .xlsx, same content as a pinned file)' -ForegroundColor Green }
+    else { Write-Host "  MISSED   unlisted .xlsx (exit $LASTEXITCODE)`n$out" -ForegroundColor Red; $failures++ }
+    Set-Content -Path $list -Value 'not-a-hash  templates/sample.template.xlsx'
+    $out = & $psExe @pinArgs $pinnedFile 2>&1 | Out-String
+    if ($LASTEXITCODE -eq 2) { Write-Host '  caught   unreadable allowed-binaries line (fails closed)' -ForegroundColor Green }
+    else { Write-Host "  MISSED   unreadable allowed-binaries line (exit $LASTEXITCODE)`n$out" -ForegroundColor Red; $failures++ }
+
     $f = Join-Path $tmp 'clean.ps1'; Set-Content -Path $f -Value $clean
     $out = & $psExe -NoProfile -File $scanner -Mode Files -Path $f 2>&1 | Out-String
     if ($LASTEXITCODE -eq 0) { Write-Host '  passed   placeholders file is clean' -ForegroundColor Green }
@@ -82,5 +108,5 @@ finally {
 }
 
 if ($failures) { Write-Host "guardrail self-test: $failures failure(s)" -ForegroundColor Red; exit 1 }
-Write-Host 'guardrail self-test: all rules fire, placeholders pass' -ForegroundColor Green
+Write-Host 'guardrail self-test: all rules fire, placeholders pass, pinned binaries hold' -ForegroundColor Green
 exit 0

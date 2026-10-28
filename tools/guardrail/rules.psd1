@@ -13,6 +13,9 @@
     BlockedNamePatterns = @('(?i)cred.*\.xml$', '(?i)\.local\.psd1$', '(?i)secrets?\.', '(?i)\.env$', '(?i)denylist\.local')
     # Placeholder input templates (examples/*.example.csv) are the only data files allowed; their CONTENT is still scanned
     AllowedNamePatterns = @('(?i)(^|/)examples/[^/]+\.example\.(csv|json)$')
+    # Binary files of a blocked type allowed at one exact content only: '<sha256>  <relative path>  # reason' per line.
+    # Changing such a file means checking its content and updating its hash in this list in the same change.
+    PinnedBinariesFile = 'allowed-binaries.txt'
     MaxFileBytes = 1048576
 
     Rules = @(

@@ -49,7 +49,7 @@ If installs are blocked, Azure Cloud Shell in the tenant includes the Graph, Exc
 | Entra ID P2 / ID Governance | PIM eligibility (02, 11), access reviews (20), risk data (21), PIM settings (22) |
 | Entra **Global Reader** or **Directory Readers** (no licence needed) | 31, which confirms which licences the tenant has |
 
-Scope-by-scope detail is in [permissions.md](permissions.md). Missing access doesn't crash a script; the affected dataset is marked `Blocked` or `EvidenceUnavailable`.
+Scope-by-scope detail is in [permissions.md](permissions.md). To send the client exactly what the scripts you plan to run need, generate it: `.\tools\New-AccessRequest.ps1 -Select 01,02,04 -OutputRoot D:\Engagement\reports`. Missing access doesn't crash a script; the affected dataset is marked `Blocked` or `EvidenceUnavailable`.
 
 ## Authentication
 
@@ -138,6 +138,13 @@ Start with `summary.csv` in each run folder.
 ## Launcher and report
 
 Two optional tools in `tools/`, both read-only (they pass `Test-ReadOnly.ps1`) and both work in Windows PowerShell 5.1 and PowerShell 7. No server or install needed.
+
+> **Running a full engagement?** `New-Engagement.ps1` sets up an engagement folder and `Start-Engagement.ps1` gives a menu for every step: access request, readiness, discovery runs (this launcher), evidence package, KPIs, draft findings and the dashboard. See [Engagement kit](engagement-kit.md).
+>
+> ```powershell
+> .\tools\New-Engagement.ps1 -Path D:\Engagements\Programme1 -Name 'Identity programme'
+> .\tools\Start-Engagement.ps1 -EngagementPath D:\Engagements\Programme1 -Server dc01.contoso.local
+> ```
 
 ### Start-Discovery.ps1
 

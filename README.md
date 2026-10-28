@@ -148,6 +148,22 @@ For work that moves through gates (baseline, pilot, staged change, operational h
 | Evidence intake log and per-deliverable status | `tools/New-EvidencePackage.ps1` with a [deliverable map](examples/deliverable-map.example.psd1) |
 | Readiness prerequisites, exceptions, status, acceptance, ownership, runbooks | [Registers and templates](docs/templates/README.md) |
 
+### Running an engagement
+
+The [engagement kit](docs/engagement-kit.md) packages the whole workflow so it runs the same way at every client: one engagement folder, an access request generated from the script catalog, the readiness checklist, baseline runs, evidence package, KPIs, draft findings reviewed in a workbook, and a one-page dashboard.
+
+```powershell
+.\tools\New-Engagement.ps1 -Path D:\Engagements\Programme1 -Name 'Identity programme'        # folder, registers, config, workbook
+.\tools\Start-Engagement.ps1 -EngagementPath D:\Engagements\Programme1 -Server dc01.contoso.local   # menu for every step
+```
+
+| Need | Use |
+|------|-----|
+| What to ask the client for: roles, Graph permissions, other access, input files, licences | `tools/New-AccessRequest.ps1` |
+| Draft findings from the latest runs, with stable IDs and evidence notes | `tools/New-FindingDrafts.ps1` with [finding rules](examples/finding-rules.psd1) |
+| Engineer, architect, Zero Trust and client review of each finding | [Findings review workbook](templates/findings-review.template.xlsx) |
+| Where the engagement stands, on one page | `tools/New-EngagementDashboard.ps1` |
+
 > **Contributing?** Read [CONTRIBUTING.md](CONTRIBUTING.md) and run `.\tools\guardrail\Install-Guardrail.ps1` once after cloning. See [Guardrail](docs/guardrail.md).
 
 ## Documentation
@@ -160,7 +176,8 @@ For work that moves through gates (baseline, pilot, staged change, operational h
 | [Output and evidence](docs/outputs.md) | Run folder, manifest, dataset statuses, handling the files |
 | [Pilot runbook](docs/pilot-runbook.md) | Moving a script from mock-tested to pilot-verified before handover |
 | [Evidence tools](docs/evidence-tools.md) | Before / after comparison, KPIs with validated denominators, evidence intake log and per-deliverable package |
-| [Registers and templates](docs/templates/README.md) | Pilot test cases, exception register, status register, ownership matrix, runbook template |
+| [Engagement kit](docs/engagement-kit.md) | Running an engagement end to end: engagement folder, access request, findings pipeline and review workbook, dashboard, reuse at the next client |
+| [Registers and templates](docs/templates/README.md) | Pilot test cases, exception register, status register, ownership matrix, findings review workbook, finding rules, runbook template |
 | [Jira finding template](docs/jira-finding-template.md) | Logging findings with evidence and closure criteria |
 | [Troubleshooting](docs/troubleshooting.md) | Symptoms, causes and fixes |
 | [Design and testing](docs/design-and-testing.md) | Design choices and how the scripts were tested |
@@ -183,11 +200,17 @@ iam_scripts/
 │   ├── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
 │   ├── Start-Discovery.ps1       launcher: readiness check, pick list, runs scripts, run summary
 │   ├── New-DiscoveryReport.ps1   one-page HTML report from the evidence folder (counts only)
-│   ├── discovery-catalog.psd1    script list and what each needs, shared by the two above
+│   ├── discovery-catalog.psd1    script list, what each needs and the access it requires (launcher, report, access request)
 │   ├── New-FindingEvidence.ps1   pre-fills a Jira finding's Scope, Evidence and Closure from a run folder
 │   ├── Compare-RunFolders.ps1    before / after evidence: two runs of the same script, row and metric changes
 │   ├── Get-KpiSummary.ps1        KPIs from the latest runs, divided by the script 27 population
 │   ├── New-EvidencePackage.ps1   evidence intake log, hash re-check and per-deliverable status
+│   ├── New-Engagement.ps1        creates an engagement folder: evidence, registers, config, findings, workbook, README
+│   ├── Start-Engagement.ps1      text menu for one engagement folder (every step of the kit)
+│   ├── New-AccessRequest.ps1     client access request (roles, permissions, inputs, licences) from the catalog
+│   ├── New-FindingDrafts.ps1     draft findings from summary metrics, with a ledger of stable finding IDs
+│   ├── New-EngagementDashboard.ps1  one-page HTML dashboard: runs, KPIs, readiness, findings, open items
+│   ├── build_findings_review.py  builds the findings review workbook template (Python 3, openpyxl)
 │   └── guardrail/                blocks identifying info and secrets from being committed (docs/guardrail.md)
 ├── examples/                     placeholder inputs and registers (never commit a filled copy)
 │   ├── hr.example.csv, iga-*.example.csv, role-definitions / rule-map   inputs for 06, 14, 15
@@ -196,7 +219,11 @@ iam_scripts/
 │   ├── pilot-test-cases.example.csv           input for 29
 │   ├── kpi-definitions.example.psd1           input for Get-KpiSummary
 │   ├── deliverable-map.example.psd1           input for New-EvidencePackage
+│   ├── finding-rules.psd1                     input for New-FindingDrafts
+│   ├── findings-review.example.csv            Review Trail export, input for New-EngagementDashboard
 │   └── readiness checklist, exception / status register, acceptance log, ownership matrix
+├── templates/
+│   └── findings-review.template.xlsx          blank findings review workbook (pinned by SHA-256 in the guardrail)
 └── docs/
     ├── getting-started.md        modules, access, sign-in, common parameters, locked-down hosts
     ├── scripts/                  one page per script: parameters, outputs, permissions, pilot check
@@ -205,6 +232,7 @@ iam_scripts/
     ├── pilot-runbook.md          how to verify each script in the real environment before handover
     ├── jira-finding-template.md  how to log each finding in Jira: fields, description template, severity guide
     ├── evidence-tools.md         before / after, KPIs, evidence package
+    ├── engagement-kit.md         running an engagement end to end with the kit
     ├── templates/                registers and runbook template
     ├── troubleshooting.md        symptoms, causes and fixes
     ├── guardrail.md              no identifying info in the repo: rules, placeholders, setup

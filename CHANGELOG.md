@@ -2,6 +2,49 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.10.0 - 2026-10-28
+
+Engagement kit. Packages the engagement workflow so it runs the same way at every client: engagement folder, access request, readiness, baseline runs, evidence package, KPIs, draft findings, review workbook and a one-page dashboard. Every new tool is local, reads run folders and registers only, writes only its own output, and passes `Test-ReadOnly.ps1`. See `docs/engagement-kit.md`.
+
+### Added
+- `tools/New-Engagement.ps1` (1.0.0): creates an engagement folder (`evidence`, `registers`, `config`, `findings`, `templates`, `reports`) with working copies of every register, input template, KPI definition, deliverable map, finding rule file and the review workbook, plus a README with the run order and exact commands for that folder. Refuses a non-empty folder unless `-Force`, and with `-Force` never overwrites a file. Refuses a folder inside the repository.
+- `tools/Start-Engagement.ps1` (1.0.0): text menu for an engagement folder (access request, readiness check, discovery runs, evidence package, KPIs, dashboard, README, draft findings). Remembers the domain controller for the session. `-Option` runs options unattended.
+- `tools/New-AccessRequest.ps1` (1.0.0): client-ready access request from the discovery catalog for the selected scripts, in Markdown, HTML and CSV. Covers:
+  - Entra roles and Graph permissions, deduplicated, worded for delegated or app-only sign-in; optional-switch permissions are marked, and `DeviceLocalCredential.ReadBasic.All` and `BitlockerKey.ReadBasic.All` are marked metadata only, never secrets
+  - other access, including the SOC notice for 18 and the app-only steps
+  - input files with templates and a client-owner column
+  - licence dependencies
+  - a read-only statement with the `Test-ReadOnly.ps1` result
+- `tools/New-FindingDrafts.ps1` (1.0.0) and `examples/finding-rules.psd1` (90 rules across scripts 01 to 31): draft engineer findings from summary metrics of the latest runs.
+  - Never drafts from Blocked, EvidenceUnavailable or Deferred evidence, from a missing or blank metric, or from a `summary.csv` that fails its hash check.
+  - A ledger (`finding-ledger.csv`) keeps finding IDs stable across runs; it can be seeded for findings raised by hand, and `-ReviewTrailCsv` keeps IDs already in the workbook from being reused; an ID that already has an evidence note is skipped. Values written with a decimal comma (`54,1`) are read as numbers.
+  - Writes an evidence note per new finding through `New-FindingEvidence.ps1`.
+  - `finding-drafts.csv` has the new findings only, in the Review Trail Engineer column order, so the rows paste straight into the workbook; `finding-evaluation.csv` records every rule's result and reason.
+- `tools/New-EngagementDashboard.ps1` (1.0.0): one self-contained HTML page (no external resources, light and dark, prints cleanly) with:
+  - discovery runs: dataset statuses per script and run age; `_aborted` folders are ignored
+  - KPIs from the latest `Get-KpiSummary` run, hash-checked
+  - the readiness checklist
+  - findings by stage, severity and client decision, from the Review Trail export
+  - status register items not completed
+
+  Counts and statuses only; every value HTML-encoded.
+- `templates/findings-review.template.xlsx`: blank findings review workbook (Engineer, Architect, Zero Trust Architect and client sections; calculated Stage, Waiting on and Disposition). Built by `tools/build_findings_review.py`.
+- `examples/findings-review.example.csv`: Review Trail CSV export with two placeholder rows, the input for the dashboard.
+- `docs/engagement-kit.md`.
+
+### Changed
+- `tools/discovery-catalog.psd1`: every script now carries its access requirements: `Roles`, `OptionalRoles` (where a switch needs one), `Scopes` (exactly the script's default `$RequiredScopes`), `OptionalScopes` (opt-in switches), `OtherAccess`, `Inputs` (with template names) and `Licence`. `Start-Discovery.ps1` and `New-DiscoveryReport.ps1` are unchanged and still read it.
+- Guardrail: a blocked file type is now allowed only when `tools/guardrail/allowed-binaries.txt` lists its path with the SHA-256 of its exact content (`PinnedBinariesFile` in `rules.psd1`).
+  - Changed content at a pinned path fails as `pinned-binary-changed`.
+  - An unlisted `.xlsx` still fails as `blocked-file-type`.
+  - An unreadable list line fails closed.
+  - `Test-Guardrail.ps1` covers all of these.
+  - `.gitignore` allows only `templates/*.template.xlsx`.
+- README, `docs/getting-started.md`, `docs/permissions.md`, `docs/templates/README.md` and `docs/guardrail.md` point to the kit.
+
+### Notes
+- Mock-tested on PowerShell 7.4 with fake engagement folders. Not yet run on Windows PowerShell 5.1; run each new tool once there before handover.
+
 ## 1.9.3 - 2026-10-27
 
 Readiness and acceptance evidence, mapped from the SOW acceptance criteria and assumptions.

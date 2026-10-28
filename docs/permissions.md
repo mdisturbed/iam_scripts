@@ -2,6 +2,8 @@
 
 Everything here is read-only. Ask for the narrowest option that works and, where PIM is in use, make roles eligible rather than permanent.
 
+> **Generate the request instead of copying these tables.** [`tools/New-AccessRequest.ps1`](../tools/New-AccessRequest.ps1) builds a client-ready access request (Markdown, HTML and CSV) for the scripts you select: Entra roles, Graph permissions worded for delegated or app-only sign-in, other access, input files and licences. It reads the same requirements from [`tools/discovery-catalog.psd1`](../tools/discovery-catalog.psd1) (`Roles`, `Scopes`, `OptionalScopes`, `OtherAccess`, `Inputs`, `Licence`). The catalog's `Scopes` match each script's `$RequiredScopes`: when a script's scopes change, update the script, the catalog and the tables below together. See [Engagement kit](engagement-kit.md#new-accessrequest).
+
 ## Summary by script
 
 | Script | Entra role | Graph scopes | Other access | Modules |
@@ -37,7 +39,7 @@ Everything here is read-only. Ask for the narrowest option that works and, where
 | 29 Pilot outcome | Global Reader or Security Reader | AuditLog.Read.All, Policy.Read.All, Directory.Read.All (+ GroupMember.Read.All with `-PilotGroupId`) | Test-case file | Graph Auth |
 | 30 Access review evidence | Global Reader | AccessReview.Read.All, Directory.Read.All, RoleManagement.Read.Directory, PrivilegedEligibilitySchedule.Read.AzureADGroup | | Graph Auth |
 | 31 Licence inventory | Global Reader or Directory Readers | Directory.Read.All by default; LicenseAssignment.Read.All or Organization.Read.All with `-GraphScope` | Read access to the evidence folder for `-EvidenceRoot` | Graph Auth |
-| Tools: Compare-RunFolders, Get-KpiSummary, New-EvidencePackage | | | Read access to the evidence folder; write access to their own output folder | none |
+| Tools: Compare-RunFolders, Get-KpiSummary, New-EvidencePackage, New-FindingDrafts, New-EngagementDashboard, New-AccessRequest, New-Engagement, Start-Engagement | | | Read access to the evidence folder; write access to their own output folder (New-FindingDrafts also writes the finding ledger and evidence notes; New-Engagement the new engagement folder) | none |
 
 Items in brackets apply only when the matching optional switch is used.
 

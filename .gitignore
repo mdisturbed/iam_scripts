@@ -42,6 +42,8 @@ secrets.*
 # Other data / output
 *.tsv
 *.xlsx
+# The one binary template allowed, pinned by SHA-256 in tools/guardrail/allowed-binaries.txt
+!templates/*.template.xlsx
 *.xls
 *.bak
 *.zip
