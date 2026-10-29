@@ -5,6 +5,7 @@ All notable changes to these scripts are recorded here. Each script also carries
 ## 1.10.1 - 2026-10-29
 
 ### Added
+- Findings review workbook: a **Gaps** tab (gap register: Control, Capability, Evidence, Coverage, Decision) with dropdowns, priority and status colouring, and gap counts on the Summary sheet. `build_findings_review.py --gaps <md>` fills it from a Markdown table; `examples/gap-register.example.md` shows the columns. Template rebuilt and its hash re-pinned.
 - Finding rule `R-30-04`: no access review instances completed in the window (script 30 `Instances in window` = 0). An empty review history is now drafted as a finding instead of passing silently.
 
 ### Fixed

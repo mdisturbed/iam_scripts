@@ -2,10 +2,12 @@
 
 Usage:
     python tools/build_findings_review.py --register docs/findings-register.md --out workbooks/findings-review.xlsx
+    python tools/build_findings_review.py --register docs/findings-register.md --gaps docs/gap-register.md --out workbooks/findings-review.xlsx
     python tools/build_findings_review.py --out findings-review.template.xlsx          # blank, client-agnostic template
 
 The register is the Markdown table in findings-register.md. Only the Engineer columns are pre-filled;
-every other section is left for its owner.
+every other section is left for its owner. The optional gap register (rows starting "| G-nn |", columns in
+GAP_COLS order) fills the Gaps sheet: control, capability, evidence, coverage and decision gaps in one place.
 """
 import argparse
 import re
@@ -79,7 +81,28 @@ LISTS = {
     'Maturity': ['Traditional', 'Initial', 'Advanced', 'Optimal'],
     'Alignment': ['Aligned', 'Aligned with changes', 'Not aligned'],
     'Decision': ['Accept and remediate', 'Accept risk', 'Defer', 'Reject'],
+    'GapType': ['Control', 'Capability', 'Evidence', 'Coverage', 'Decision'],
+    'GapStatus': ['Open', 'In progress', 'Closed', 'Accepted'],
+    'Priority': ['High', 'Medium', 'Low'],
 }
+
+GAP_COLS = [
+    # (name, width, comment, list)
+    ('ID', 7, 'Gap ID, G-01 onward', None),
+    ('Type', 12, 'Control = environment falls short (theme over findings); Capability = process or tool missing; Evidence = could not be assessed yet; Coverage = nothing measures it; Decision = waiting on a decision', 'GapType'),
+    ('Gap', 34, 'The gap, in one line', None),
+    ('Area', 16, 'Zero Trust pillar or domain', 'Pillar'),
+    ('Current state', 30, 'What is in place today', None),
+    ('Target state', 30, 'What closes the gap', None),
+    ('Impact', 30, 'What the gap puts at risk, or what it blocks', None),
+    ('Priority', 10, 'High / Medium / Low', 'Priority'),
+    ('Related findings', 16, 'Finding IDs on the Review Trail', None),
+    ('Source', 26, 'Script and run, finding, or meeting and date where it was raised', None),
+    ('Owner', 18, 'Role that closes it', None),
+    ('Status', 12, 'Open / In progress / Closed / Accepted', 'GapStatus'),
+    ('Next step', 34, 'Next action, or why it was accepted', None),
+    ('Raised', 12, 'Date raised', None),
+]
 
 
 def font(**kw):
@@ -104,7 +127,74 @@ def parse_register(path):
     return rows
 
 
-def build(rows, out, title, as_of):
+def parse_gaps(path):
+    rows = []
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            if not re.match(r'^\| G-\d+ \|', line):
+                continue
+            cells = [x.strip().replace('`', '') for x in line.strip().strip('|').split('|')]
+            if len(cells) < len(GAP_COLS):
+                continue
+            rows.append(cells[:len(GAP_COLS)])
+    return rows
+
+
+def build_gaps(wb, gaps, list_ref):
+    gs = wb.create_sheet('Gaps', 1)
+    hdr, light = '833C0B', 'FBE5D6'
+    gs.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(GAP_COLS))
+    h = gs.cell(row=1, column=1, value='Gap register  (control, capability, evidence, coverage and decision gaps; findings stay on the Review Trail)')
+    h.font = font(bold=True, color='FFFFFF', size=11)
+    h.fill = PatternFill('solid', fgColor=hdr)
+    h.alignment = Alignment(horizontal='left', vertical='center')
+    for ci, (name, width, comment, _l) in enumerate(GAP_COLS, start=1):
+        cell = gs.cell(row=2, column=ci, value=name)
+        cell.font = font(bold=True, color='FFFFFF')
+        cell.fill = PatternFill('solid', fgColor=hdr)
+        cell.alignment = Alignment(wrap_text=True, vertical='center', horizontal='center')
+        cell.border = BORDER
+        cell.comment = Comment(comment, 'Gap register')
+        gs.column_dimensions[get_column_letter(ci)].width = width
+    gs.row_dimensions[1].height = 22
+    gs.row_dimensions[2].height = 30
+    first, last = 3, 3 + len(gaps) + 40
+    for r in range(first, last + 1):
+        data = gaps[r - first] if r - first < len(gaps) else None
+        for ci in range(1, len(GAP_COLS) + 1):
+            cell = gs.cell(row=r, column=ci, value=(data[ci - 1] or None) if data else None)
+            cell.font = font(size=10)
+            cell.alignment = Alignment(wrap_text=True, vertical='top')
+            cell.border = BORDER
+            cell.fill = PatternFill('solid', fgColor=light)
+    for ci, (name, _w, _c, lst) in enumerate(GAP_COLS, start=1):
+        col = get_column_letter(ci)
+        if lst:
+            v = DataValidation(type='list', formula1=list_ref(lst), allow_blank=True)
+            v.error = 'Pick a value from the list'
+            v.errorTitle = 'Gap register'
+            gs.add_data_validation(v)
+            v.add('%s%d:%s%d' % (col, first, col, last))
+    col = lambda name: get_column_letter([g[0] for g in GAP_COLS].index(name) + 1)
+    for s, colr in {'High': 'FF6600', 'Medium': 'FFC000', 'Low': '70AD47'}.items():
+        gs.conditional_formatting.add('%s%d:%s%d' % (col('Priority'), first, col('Priority'), last), FormulaRule(
+            formula=['%s%d="%s"' % (col('Priority'), first, s)], fill=PatternFill('solid', fgColor=colr),
+            font=Font(name=FONT, bold=True, color='FFFFFF')))
+    for s, colr in {'Closed': 'C6EFCE', 'Accepted': 'EDEDED', 'In progress': 'FFF2CC'}.items():
+        gs.conditional_formatting.add('%s%d:%s%d' % (col('Status'), first, col('Status'), last), FormulaRule(
+            formula=['%s%d="%s"' % (col('Status'), first, s)], fill=PatternFill('solid', fgColor=colr)))
+    gs.freeze_panes = gs.cell(row=3, column=4)
+    gs.auto_filter.ref = 'A2:%s%d' % (get_column_letter(len(GAP_COLS)), last)
+    gs.sheet_view.zoomScale = 90
+    gs.page_setup.orientation = 'landscape'
+    gs.page_setup.fitToWidth = 1
+    gs.page_setup.fitToHeight = 0
+    gs.sheet_properties.pageSetUpPr.fitToPage = True
+    gs.print_title_rows = '1:2'
+    return col, first, last
+
+
+def build(rows, out, title, as_of, gaps=None):
     wb = Workbook()
     ws = wb.active
     ws.title = 'Review Trail'
@@ -226,6 +316,9 @@ def build(rows, out, title, as_of):
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.print_title_rows = '1:2'
 
+    # ---- Gaps ----
+    gcol, gfirst, glast = build_gaps(wb, gaps or [], list_ref)
+
     # ---- Summary ----
     sm = wb.create_sheet('Summary', 0)
     sm.column_dimensions['A'].width = 34
@@ -261,6 +354,24 @@ def build(rows, out, title, as_of):
     r = block(r, 'Client decision', 'Client decision', LISTS['Decision'])
     r = block(r, 'Zero Trust pillar', 'ZT pillar', LISTS['Pillar'])
 
+    def gap_block(r0, heading, colname, values):
+        for cc, txt in ((1, heading), (2, 'Gaps')):
+            sm.cell(row=r0, column=cc, value=txt).font = font(bold=True, color='FFFFFF')
+            sm.cell(row=r0, column=cc).fill = PatternFill('solid', fgColor='833C0B')
+        rng = "Gaps!$%s$%d:$%s$%d" % (gcol(colname), gfirst, gcol(colname), glast)
+        rr = r0 + 1
+        for v in values:
+            sm.cell(row=rr, column=1, value=v).font = font()
+            sm.cell(row=rr, column=2, value='=COUNTIF(%s,A%d)' % (rng, rr)).font = font()
+            for cc in (1, 2):
+                sm.cell(row=rr, column=cc).border = BORDER
+            rr += 1
+        sm.cell(row=rr, column=1, value='Total').font = font(bold=True)
+        sm.cell(row=rr, column=2, value='=SUM(B%d:B%d)' % (r0 + 1, rr - 1)).font = font(bold=True)
+        return rr + 2
+    r = gap_block(r, 'Gap type', 'Type', LISTS['GapType'])
+    r = gap_block(r, 'Gap status', 'Status', LISTS['GapStatus'])
+
     # ---- Instructions ----
     ins = wb.create_sheet('Instructions', 0)
     ins.column_dimensions['A'].width = 36
@@ -273,7 +384,8 @@ def build(rows, out, title, as_of):
         ('Stage logic', 'Draft = Engineer section only. Architect reviewed = Architect severity set. With client = Alignment set. Closed = Client decision set.'),
         ('After the decision', 'Accept and remediate -> Jira story on the remediation backlog. Accept risk -> exception register (owner, expiry, compensating control). Defer -> status register (owner, risk, disposition, follow-on, target date). Reject -> record the rationale. Put the resulting ID in Tracking ID.'),
         ('Evidence', 'Each finding links to its evidence note (findings\\F-xx.md) in the approved evidence location: run folder, file SHA-256, run account, data-as-of time and the closure test. Never paste names or account details into this workbook.'),
-        ('Definitions', 'Severity scale, Zero Trust maturity levels, pillars and decisions: see the Definitions sheet.'),
+        ('Gaps sheet', 'Everything that is a gap but not a counted finding: Control (a theme that groups findings), Capability (a process or tool that is missing, often raised in a meeting), Evidence (could not be assessed yet: access, inputs), Coverage (nothing measures it) and Decision (waiting on a decision). Link gaps to findings by ID; do not copy findings onto it. Close an Evidence gap when the run lands; it may then produce findings.'),
+        ('Definitions', 'Severity scale, Zero Trust maturity levels, pillars, decisions and gap types: see the Definitions sheet.'),
         ('Example row (illustrative)', 'ID F-EX | Finding: security groups with no accountable owner | Source: 05 ad-groups.csv, OwnerStatus not OK | Count 42 of 310 | Observed severity Low | Architect severity Low; root cause: no owner field in the group request form; solution: make owner mandatory in the request form and assign owners for existing groups; effort M; gate G3 | ZT pillar Governance, Use least privilege, Initial -> Advanced, Aligned | Client decision Accept and remediate -> Remediation backlog (Jira story).'),
     ]
     for i, (k, v) in enumerate(lines, start=1):
@@ -318,6 +430,12 @@ def build(rows, out, title, as_of):
         ('Accept risk', 'The client accepts the residual risk without remediation; recorded in the exception register with owner, compensating control and expiry.'),
         ('Defer', 'Valid finding, not addressed in this phase; recorded in the status register with owner, risk, disposition, follow-on and target date. Never represented as implemented.'),
         ('Reject', 'The client does not accept the finding; the rationale is recorded.'),
+        ('Gap type', None),
+        ('Control', 'The environment falls short of the target; groups the findings that show it.'),
+        ('Capability', 'A process, tool or function that does not exist or is not used (for example no access review process, licensed feature unused).'),
+        ('Evidence', 'Not assessed yet because access, an export or an input is missing. Never read as a clean result.'),
+        ('Coverage', 'Asked for by the scope but not measured by any script; needs another source.'),
+        ('Decision', 'Work is waiting on a decision (platform direction, ownership, scope).'),
         ('Source', 'Severity scale: engagement register instructions. Maturity levels and pillars: CISA Zero Trust Maturity Model v2.0 (April 2023), https://www.cisa.gov/zero-trust-maturity-model'),  # guardrail:allow public CISA source URL, not an internal domain
     ]
     for i, (k, v) in enumerate(defs, start=1):
@@ -340,10 +458,12 @@ def build(rows, out, title, as_of):
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--register', default='')
+    ap.add_argument('--gaps', default='')
     ap.add_argument('--out', required=True)
     ap.add_argument('--title', default='Findings review trail')
     ap.add_argument('--as-of', default='')
     a = ap.parse_args()
     rows = parse_register(a.register) if a.register else []
-    build(rows, a.out, a.title, a.as_of or 'template')
-    print('rows', len(rows), '->', a.out)
+    gaps = parse_gaps(a.gaps) if a.gaps else []
+    build(rows, a.out, a.title, a.as_of or 'template', gaps)
+    print('rows', len(rows), 'gaps', len(gaps), '->', a.out)

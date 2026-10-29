@@ -214,6 +214,16 @@ Output: `<OutputRoot>\New-FindingDrafts\<timestamp>Z\` with:
 
 The blank workbook is [`templates/findings-review.template.xlsx`](../templates/findings-review.template.xlsx). It is built by [`tools/build_findings_review.py`](../tools/build_findings_review.py) (Python 3 with openpyxl): `python tools/build_findings_review.py --out findings-review.xlsx`.
 
+**Gaps sheet:** the workbook also has a **Gaps** tab for everything that is a gap but not a counted finding. Each gap has a type:
+
+- **Control:** a theme grouping findings.
+- **Capability:** a missing or unused process or tool, often raised in a meeting.
+- **Evidence:** not assessed yet.
+- **Coverage:** no script measures it.
+- **Decision:** waiting on a decision.
+
+Gaps link to findings by ID and are counted on the Summary sheet. Keep them in a Markdown table ([example](../examples/gap-register.example.md)) and build the tab with `--gaps gap-register.md`, or fill the tab directly.
+
 ## Reusing the kit at the next client
 
 1. Pull the latest `iam_scripts` and run `.\tools\Test-ReadOnly.ps1`.
