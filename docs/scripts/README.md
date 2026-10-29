@@ -14,7 +14,7 @@ One page per script: what it collects, parameters, output files, permissions, pi
 | 08 | [Extension attribute inventory](08-extension-attribute-inventory.md) | Which custom / extension attributes are free to carry new data, and does anything already read them? | AD (+ Entra) | 1.1.1 |
 | 09 | [Mail forwarding and external sharing](09-mail-forwarding-and-external-sharing.md) | Is mail being forwarded out, who can read or send as other mailboxes, and how open is SharePoint / OneDrive sharing? | Exchange Online + SharePoint | 1.1.1 |
 | 10 | [Guest access](10-guest-access.md) | How many guests and external accounts are there, are they used, what can they reach, and which partner tenants do we trust? | Entra | 1.1.1 |
-| 11 | [Azure RBAC](11-azure-rbac.md) | Who actually holds access to Azure resources (groups expanded), at what scope, permanently or just-in-time, and through which other paths? | Azure + Entra | 1.1.1 |
+| 11 | [Azure RBAC](11-azure-rbac.md) | Who actually holds access to Azure resources (groups expanded), at what scope, permanently or just-in-time, and through which other paths? | Azure + Entra | 1.1.2 |
 | 12 | [Stale accounts](12-stale-accounts.md) | Which identities are really unused once AD and Entra activity are combined, and what do the stale ones still hold? | AD + Entra | 1.1.1 |
 | 13 | [Hybrid sync scope](13-hybrid-sync-scope.md) | What actually syncs from AD to Entra, where do they disagree, and which on-prem admins reach the cloud? | AD + Entra | 1.1.1 |
 | 14 | [IGA reconciliation](14-iga-reconciliation.md) | Where does the IGA platform's view of accounts and group access differ from AD, including access through nested groups and leavers who still hold groups? | AD + IGA export | 1.1.0 |

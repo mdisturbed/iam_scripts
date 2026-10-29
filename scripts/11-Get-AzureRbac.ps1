@@ -55,7 +55,7 @@
     .\11-Get-AzureRbac.ps1 -AuthMode AppCertificate -TenantId tenant-id-redacted -ClientId <app-id> -CertificateThumbprint <thumbprint>
 
 .NOTES
-    Version : 1.1.1
+    Version : 1.1.2
     Requires: PowerShell 5.1 or 7.x, Az.Accounts module, Microsoft.Graph.Authentication module
     Azure   : Reader on the root management group (or each subscription) to see all assignments,
               Key Vaults, Lighthouse registrations, deny assignments and managed identities
@@ -83,7 +83,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '11-AzureRbac'
-$ScriptVersion = '1.1.1'
+$ScriptVersion = '1.1.2'
 $RequiredScopes = @('Directory.Read.All')
 
 #region ---- Common helpers (identical in every Graph script; self-contained by design) ----
@@ -806,6 +806,17 @@ try {
     Export-Dataset -Name 'azure-deny-assignments' -Rows $denyRows -Status $(if ($denyFailed) { 'Partial' } else { 'Completed' }) -Note $(if ($denyFailed) { "$denyFailed subscription(s) unreadable" } else { 'Deny assignments override role assignments; most are created by Azure (managed apps, blueprints, deployment stacks)' })
     Export-Dataset -Name 'managed-identities' -Rows $miRows -Status $(if ($miFailed) { 'Partial' } else { 'Completed' }) -Note ('User-assigned managed identities joined to their role assignments; system-assigned identities appear in azure-role-assignments as ServicePrincipal' + $(if ($miFailed) { "; $miFailed subscription(s) unreadable" } else { '' }))
 
+    # ---- No visible subscriptions: Azure returns an empty list (not 403) when the run account has no Azure RBAC role ----
+    $noSubs = (@($subs).Count -eq 0)
+    $noSubsNote = 'No subscriptions visible to the run account. Azure returns an empty list, not an error, when the account holds no Azure RBAC role, so zero rows here are not evidence of "none". Grant Reader at the root management group (or on each in-scope subscription) and rerun.'
+    if ($noSubs) {
+        Write-RunLog $noSubsNote 'WARN'
+        foreach ($d in $script:Datasets) {
+            if ($d.Dataset -in @('azure-management-groups', 'summary')) { continue }
+            if ($d.Status -in @('Completed', 'Partial') -and [int]$d.Rows -eq 0) { $d.Status = 'Blocked'; $d.Note = $noSubsNote }
+        }
+    }
+
     # ---- 11. Summary ----
     $summary = [System.Collections.Generic.List[object]]::new()
     function Add-Metric { param($Metric, $Value, $Note = '') $summary.Add([pscustomobject][ordered]@{ Metric = $Metric; Value = $Value; Note = $Note }) }
@@ -844,6 +855,12 @@ try {
     Add-Metric -Metric 'Deny assignments' $denyRows.Count
     Add-Metric -Metric 'User-assigned managed identities' $miRows.Count
     Add-Metric -Metric 'Managed identities with privileged roles' @($miRows | Where-Object { $_.Flags -match 'PrivilegedRole' }).Count
+    if ($noSubs) {
+        foreach ($m in $summary) {
+            if ($m.Metric -in @('Management groups visible', 'Subscriptions in scope')) { if ($m.Metric -eq 'Subscriptions in scope') { $m.Note = $noSubsNote }; continue }
+            $m.Value = ''; $m.Note = 'Not assessed: no subscriptions visible to the run account'
+        }
+    }
     Export-Dataset -Name 'summary' -Rows $summary
 }
 catch {

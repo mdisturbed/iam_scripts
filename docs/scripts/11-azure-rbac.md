@@ -1,6 +1,6 @@
 # 11 - Azure RBAC
 
-**Script:** [`11-Get-AzureRbac.ps1`](../../scripts/11-Get-AzureRbac.ps1) · **Version:** 1.1.1 · **Source:** Azure + Entra
+**Script:** [`11-Get-AzureRbac.ps1`](../../scripts/11-Get-AzureRbac.ps1) · **Version:** 1.1.2 · **Source:** Azure + Entra
 
 > Who actually holds access to Azure resources (groups expanded to people and workload identities), at what scope, permanently or just-in-time, and through which other paths (Key Vault access policies, Lighthouse, managed identities)?
 
@@ -70,6 +70,7 @@ See the [pilot runbook](../pilot-runbook.md).
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Script 11: "Scopes that could not be read" above 0 | No Reader on some subscriptions | Request Reader at the root management group |
+| Every dataset `Blocked` with "No subscriptions visible to the run account"; summary values blank | The account holds no Azure RBAC role. Azure returns an empty subscription list rather than an error, so before 1.1.2 this showed as Completed with 0 rows | Request Reader at the root management group (granting it may need a Global Administrator to elevate access first), or Reader on each in-scope subscription and run with `-SkipManagementGroups` |
 | `azure-management-groups` is `Partial` | Tree not readable from the tenant root and some groups unreadable | Reader at the root management group |
 | `PrincipalNotVerified` on many rows | Graph 403 or throttling on `directoryObjects` | Check the Graph consent for Directory.Read.All and re-run; do not treat these as deleted |
 | `azure-effective-users` is `Partial` | Some groups could not be expanded | See the dataset note (group IDs) and run.log |

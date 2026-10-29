@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.10.1 - 2026-10-29
+
+### Fixed
+- `11-Get-AzureRbac.ps1` 1.1.2: when the run account holds no Azure RBAC role, Azure returns an empty subscription list instead of an error, and every dataset was recorded as Completed with 0 rows. Subscription-scoped datasets with no rows are now Blocked with the reason, and the summary values are blank ("Not assessed") instead of 0, so findings and KPIs are not drawn from them.
+
 ## 1.10.0 - 2026-10-28
 
 Engagement kit. Packages the engagement workflow so it runs the same way at every client: engagement folder, access request, readiness, baseline runs, evidence package, KPIs, draft findings, review workbook and a one-page dashboard. Every new tool is local, reads run folders and registers only, writes only its own output, and passes `Test-ReadOnly.ps1`. See `docs/engagement-kit.md`.
