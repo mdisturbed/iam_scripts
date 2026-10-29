@@ -552,6 +552,11 @@
            Severity = 'Medium'; HitrustCsf = '09.c Segregation of Duties'; ZtPillar = 'Governance'; ZtPrinciple = 'Use least privilege'
            Recommendation = 'Change the reviewers so nobody reviews their own access'
            Dataset = 'review-exceptions' }
+        @{ RuleId = 'R-30-04'; Script = '30-AccessReviewEvidence'; Metric = 'Instances in window'; Condition = 'Equals'; Threshold = 0
+           Finding = 'No user access reviews completed in the review window'
+           Population = 'Access review definitions'
+           Severity = 'High'; HitrustCsf = '01.e Review of User Access Rights'; ZtPillar = 'Governance'; ZtPrinciple = 'Use least privilege'
+           Recommendation = 'Confirm whether reviews run in another tool and collect that evidence; if none, start with reviews that need no role model (privileged roles, guests, high-risk app grants, group memberships by owner)' }
         @{ RuleId = 'R-31-01'; Script = '31-LicenceInventory'; Metric = 'Datasets EvidenceUnavailable in latest runs'; Condition = 'GreaterThan'; Threshold = 0
            Finding = 'Evidence the tenant cannot produce, mostly for lack of a licence'
            Population = 'Script runs scanned'

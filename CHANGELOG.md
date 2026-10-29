@@ -4,6 +4,9 @@ All notable changes to these scripts are recorded here. Each script also carries
 
 ## 1.10.1 - 2026-10-29
 
+### Added
+- Finding rule `R-30-04`: no access review instances completed in the window (script 30 `Instances in window` = 0). An empty review history is now drafted as a finding instead of passing silently.
+
 ### Fixed
 - `19-Get-DcAuthProtocolUsage.ps1` 1.1.1: when no domain controller event log can be read, the event-derived summary counts are blank ("Not assessed") instead of 0; when only some DC queries are blocked, those counts are noted as a lower bound.
 - `11-Get-AzureRbac.ps1` 1.1.2: when the run account holds no Azure RBAC role, Azure returns an empty subscription list instead of an error, and every dataset was recorded as Completed with 0 rows. Subscription-scoped datasets with no rows are now Blocked with the reason, and the summary values are blank ("Not assessed") instead of 0, so findings and KPIs are not drawn from them.

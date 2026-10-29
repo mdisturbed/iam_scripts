@@ -161,7 +161,7 @@ discovery runs  ->  New-FindingDrafts  ->  finding-drafts.csv  ->  Review Trail 
 
 ### Rules
 
-[`examples/finding-rules.psd1`](../examples/finding-rules.psd1) holds one rule per candidate finding (90 rules across scripts 01 to 31). Each names a script's run folder, a `summary.csv` metric, a condition and a threshold, plus the draft text: finding, observed severity, HITRUST CSF reference, Zero Trust pillar and principle, and an initial recommendation. `New-Engagement` copies it to `config\finding-rules.psd1` so thresholds can be tuned per engagement. Keep every `RuleId`: the ledger depends on it.
+[`examples/finding-rules.psd1`](../examples/finding-rules.psd1) holds one rule per candidate finding (91 rules across scripts 01 to 31). Each names a script's run folder, a `summary.csv` metric, a condition and a threshold, plus the draft text: finding, observed severity, HITRUST CSF reference, Zero Trust pillar and principle, and an initial recommendation. `New-Engagement` copies it to `config\finding-rules.psd1` so thresholds can be tuned per engagement. Keep every `RuleId`: the ledger depends on it.
 
 A rule is evaluated only when its evidence is usable. No run gives **NoRun**. A missing or blank metric, a metric that says the read failed, a rule dataset that is Blocked, EvidenceUnavailable or Deferred, or a `summary.csv` that no longer matches its SHA-256 gives **NotEvaluable**. Nothing is ever drafted from evidence that is not there.
 
