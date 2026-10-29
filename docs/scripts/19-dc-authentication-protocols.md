@@ -1,6 +1,6 @@
 # 19 - DC authentication protocols
 
-**Script:** [`19-Get-DcAuthProtocolUsage.ps1`](../../scripts/19-Get-DcAuthProtocolUsage.ps1) · **Version:** 1.1.0 · **Source:** DC event logs + AD
+**Script:** [`19-Get-DcAuthProtocolUsage.ps1`](../../scripts/19-Get-DcAuthProtocolUsage.ps1) · **Version:** 1.1.1 · **Source:** DC event logs + AD
 
 > Who still uses NTLM (v1 and LM especially) or RC4/DES Kerberos, against which servers, and which accounts can't do AES?
 
@@ -72,6 +72,7 @@ Usually tuned on first run: `-Hours` to fit how much Security log the DCs hold. 
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| Script 19: event datasets `Blocked`, summary counts blank ("Not assessed") | No DC event log could be read: not in Event Log Readers, or RPC / remote event log blocked | Request Event Log Readers on the DCs; check firewall (RPC, remote event log management) from the run host. Before 1.1.1 the summary showed 0 here |
 | Script 19: all counts zero | Auditing not enabled, or log rolled over | Check `dc-read-status.csv` (`LogStartsUtc`) and audit policy; use the SIEM |
 | Script 19: DC rows `Blocked` | Not in Event Log Readers, or RPC blocked | Request Event Log Readers on DCs; check firewall to DCs |
 | Script 19: `ntlm-dc-audit-8004` is `EvidenceUnavailable` | NTLM auditing is off on the DCs | Set "Network security: Restrict NTLM: Audit NTLM authentication in this domain" (audit only) on the DCs, wait, and rerun |

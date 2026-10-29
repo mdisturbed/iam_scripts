@@ -22,7 +22,7 @@ One page per script: what it collects, parameters, output files, permissions, pi
 | 16 | [Device posture](16-device-posture.md) | Are devices joined, managed, compliant and backed up, who can join them, and which accounts does device-based CA exempt? | Entra + Intune | 1.1.1 |
 | 17 | [AWS IAM posture](17-aws-iam-posture.md) | Which AWS identities exist, who is admin-equivalent and through which policy, and which people sit behind each Identity Center assignment? | AWS | 1.1.0 |
 | 18 | [AD delegation](18-ad-delegation.md) | Who has dangerous rights through AD permissions, and which real accounts end up holding them? | AD | 1.1.0 |
-| 19 | [DC authentication protocols](19-dc-authentication-protocols.md) | Who still uses NTLM (v1 and LM especially) or RC4/DES Kerberos, against which servers, and which accounts can't do AES? | DC event logs + AD | 1.1.0 |
+| 19 | [DC authentication protocols](19-dc-authentication-protocols.md) | Who still uses NTLM (v1 and LM especially) or RC4/DES Kerberos, against which servers, and which accounts can't do AES? | DC event logs + AD | 1.1.1 |
 | 20 | [Governance coverage](20-governance-coverage.md) | What share of apps, groups and privileged roles is actually covered by access reviews, what do access packages grant, and are joiner / mover / leaver workflows in place? | Entra ID Governance | 1.1.1 |
 | 21 | [Identity risk](21-identity-risk.md) | Who is at risk right now, and does Conditional Access act on risk for everyone? | Entra ID Protection | 1.1.1 |
 | 22 | [PIM role settings](22-pim-role-settings.md) | What does it actually take to activate each admin role or privileged group, and who approves it? | Entra PIM | 1.1.1 |

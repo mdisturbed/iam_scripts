@@ -51,7 +51,7 @@
     .\19-Get-DcAuthProtocolUsage.ps1 -DomainControllers dc01.contoso.local,dc02.contoso.local -Hours 4 -SkipFailures
 
 .NOTES
-    Version : 1.1.0
+    Version : 1.1.1
     Requires: PowerShell 5.1 or 7.x on Windows, RSAT ActiveDirectory module (to list DCs, read
               account encryption settings and workstation operating systems)
     Access  : membership of Event Log Readers on the domain controllers (or equivalent), and
@@ -81,7 +81,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '19-DcAuthProtocols'
-$ScriptVersion = '1.1.0'
+$ScriptVersion = '1.1.1'
 
 #region ---- Common helpers (identical in every AD script; self-contained by design) ----
 if (-not $OutputRoot) { $OutputRoot = Join-Path $PSScriptRoot 'output' }
@@ -542,6 +542,17 @@ try {
     if (-not $SkipAdAccounts -and $adAvailable) {
         Add-Metric -Metric 'Accounts allowing only RC4/DES' -Value @($acctRows | Where-Object { $_.Reason -match 'Rc4OrDesOnly' }).Count -Note 'msDS-SupportedEncryptionTypes without AES bits'
         Add-Metric -Metric 'Service accounts with a password older than AES keys' -Value @($acctRows | Where-Object { $_.Reason -match 'PasswordPredatesAes' }).Count -Note 'Heuristic; a password reset creates AES keys'
+    }
+    # Event-derived metrics: blank when no DC event log could be read, so a refused read is never reported as zero.
+    $eventRows = @($statusRows | Where-Object { $_.Query -ne 'NTLM-Audit-8004' })
+    $eventBlocked = @($eventRows | Where-Object Status -eq 'Blocked')
+    $keep = @('Domain controllers queried', 'DC queries blocked', 'DC queries capped at MaxEventsPerQuery', 'Shortest window actually covered (hours)', 'NTLM audit (8004): servers receiving NTLM', 'Accounts allowing only RC4/DES', 'Service accounts with a password older than AES keys')
+    if ($eventRows.Count -and $eventBlocked.Count -eq $eventRows.Count) {
+        Write-RunLog 'No domain controller event log could be read. Event counts are not assessed (not zero); see dc-read-status. Usually Event Log Readers membership or RPC access to the DCs.' 'WARN'
+        foreach ($m in $summary) { if ($keep -notcontains $m.Metric) { $m.Value = ''; $m.Note = 'Not assessed: no DC event log could be read (see dc-read-status)' } }
+    }
+    elseif ($eventBlocked.Count) {
+        foreach ($m in $summary) { if ($keep -notcontains $m.Metric) { $m.Note = (Join-Values @($m.Note, 'Lower bound: some DC queries were blocked')) } }
     }
     Export-Dataset -Name 'summary' -Rows $summary
 }

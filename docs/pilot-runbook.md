@@ -157,7 +157,7 @@ When a script is pilot-verified, hand it over with:
 | 16 Device posture | 1.1.1 | | | | | Mock-tested |
 | 17 AWS IAM posture | 1.1.0 | | | | | Mock-tested |
 | 18 AD delegation | 1.1.0 | | | | | Mock-tested |
-| 19 DC auth protocols | 1.1.0 | | | | | Mock-tested |
+| 19 DC auth protocols | 1.1.1 | | | | | Mock-tested |
 | 20 Governance coverage | 1.1.1 | | | | | Mock-tested |
 | 21 Identity risk | 1.1.1 | | | | | Mock-tested |
 | 22 PIM role settings | 1.1.1 | | | | | Mock-tested |
