@@ -44,7 +44,7 @@
     .\tools\Start-EngagementConsole.ps1 -CreateShortcut
 
 .NOTES
-    Version : 1.1.0
+    Version : 1.1.1
     Requires: Windows, Windows PowerShell 5.1 or PowerShell 7.x (WPF). Started by the .cmd in STA mode.
     Scopes  : none itself; each tool documents its own.
 #>
@@ -55,7 +55,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$ConsoleVersion = '1.1.0'
+$ConsoleVersion = '1.1.1'
 # Started from the .cmd the PowerShell window is hidden: show a start-up failure instead of closing silently
 trap {
     $m = "The engagement console could not start:`n$($_.Exception.Message)"
@@ -120,7 +120,13 @@ $script:Settings = Read-Settings
 $catalog = @((Import-PowerShellDataFile -Path (Join-Path $PSScriptRoot 'discovery-catalog.psd1')).Scripts)
 
 # ------------------------------------------------------------------ launching
+# Commands run in PowerShell 7 (pwsh) when it is installed: the Graph, Az, Exchange and AWS modules are usually
+# installed there, and Windows PowerShell 5.1 (which the .cmd uses for the window itself) does not see them.
 $script:Exe = [Diagnostics.Process]::GetCurrentProcess().Path
+$pwshCmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $pwshCmd) { $pf = Join-Path $env:ProgramFiles 'PowerShell\7\pwsh.exe'; if (Test-Path -LiteralPath $pf) { $pwshCmd = Get-Item -LiteralPath $pf } }
+if ($pwshCmd) { $script:Exe = $(if ($pwshCmd.Source) { $pwshCmd.Source } else { $pwshCmd.FullName }) }
+$script:ShellName = $(if ($script:Exe -match 'pwsh\.exe$') { 'PowerShell 7' } else { 'Windows PowerShell 5.1' })
 # PowerShell also treats the typographic quotes U+2018/2019/201A/201B as single quotes: double those too
 function ConvertTo-Quoted([string]$s) { "'" + ($s -replace "['\u2018\u2019\u201A\u201B]", '$0$0') + "'" }
 
@@ -561,7 +567,7 @@ function Open-Engagement([string]$Path) {
     $window.Title = "Engagement console - $($p.Name)"
     Update-Grid
     Update-Actions
-    Set-Status "Opened $($p.Name)"
+    Set-Status "Opened $($p.Name). Commands run in $script:ShellName."
 }
 
 function Select-Folder([string]$Description) {
@@ -656,5 +662,6 @@ $start = $(if ($EngagementPath) { $EngagementPath } else { $script:Settings.Last
 $window.Add_ContentRendered({
         if ($start -and (Test-Path -LiteralPath $start)) { Open-Engagement $start }
         else { Set-Status "Engagement console $ConsoleVersion. Open an engagement folder, or create a new one." }
+        $ui.Status.Text += "   |   Commands run in $script:ShellName"
     })
 [void]$window.ShowDialog()

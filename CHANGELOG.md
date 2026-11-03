@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.11.2 - 2026-11-03
+
+### Fixed
+- `Start-EngagementConsole.ps1` 1.1.1: commands now run in PowerShell 7 (`pwsh.exe`) when it is installed, instead of Windows PowerShell 5.1. Modules installed only for PowerShell 7 (Microsoft.Graph, Az, ExchangeOnlineManagement, AWS.Tools) made every script show as Blocked "module not installed". The status bar shows which shell commands run in.
+
 ## 1.11.1 - 2026-11-03
 
 ### Added
