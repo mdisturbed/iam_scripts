@@ -34,14 +34,23 @@
 .PARAMETER Name
     Engagement name for the README and the dashboard title, e.g. 'Identity programme'.
 
+.PARAMETER EvidencePath
+    Where the run folders live, when not in evidence\: '.' for the engagement folder itself (an existing
+    evidence folder adopted as an engagement), a path relative to it, or an absolute path. Written to
+    config\engagement.psd1; every kit tool that takes the engagement folder reads it from there.
+
 .PARAMETER Force
     Use a folder that already has files in it. Adds missing folders and files; never overwrites a file.
 
 .EXAMPLE
     .\tools\New-Engagement.ps1 -Path D:\Engagements\Programme1 -Name 'Identity programme'
+.EXAMPLE
+    .\tools\New-Engagement.ps1 -Path $env:USERPROFILE\IAM-Evidence -Name 'Identity programme' -EvidencePath . -Force
+    Adopt an evidence folder that already holds run folders: adds registers, config, findings, templates and
+    reports beside them and leaves the runs where they are.
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.1.0
     Requires: PowerShell 5.1 or 7.x.
     Scopes  : none. Reads local files only.
     Licence : none
@@ -50,12 +59,13 @@
 param(
     [Parameter(Mandatory)][string]$Path,
     [Parameter(Mandatory)][string]$Name,
+    [string]$EvidencePath = '',
     [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = 'New-Engagement'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.1.0'
 
 $repoRoot  = Split-Path $PSScriptRoot -Parent
 $examples  = Join-Path $repoRoot 'examples'
@@ -78,15 +88,27 @@ foreach ($r in $registerFiles) { $copies.Add(@{ From = Join-Path $examples "$r.e
 $copies.Add(@{ From = Join-Path $examples 'kpi-definitions.example.psd1'; To = Join-Path (Join-Path $Path 'config') 'kpi-definitions.psd1' })
 $copies.Add(@{ From = Join-Path $examples 'deliverable-map.example.psd1'; To = Join-Path (Join-Path $Path 'config') 'deliverable-map.psd1' })
 $copies.Add(@{ From = Join-Path $examples 'finding-rules.psd1'; To = Join-Path (Join-Path $Path 'config') 'finding-rules.psd1' })
+$copies.Add(@{ From = Join-Path $examples 'actions.example.psd1'; To = Join-Path (Join-Path $Path 'config') 'actions.psd1' })
 $copies.Add(@{ From = Join-Path $templates 'findings-review.template.xlsx'; To = Join-Path (Join-Path $Path 'templates') 'findings-review.xlsx' })
 foreach ($c in $copies) { if (-not (Test-Path -LiteralPath $c.From)) { throw "Source missing from the repository: $($c.From)" } }
 
 $created = [System.Collections.Generic.List[string]]::new()
 $kept = [System.Collections.Generic.List[string]]::new()
-foreach ($d in @('', 'evidence', 'registers', 'config', 'findings', 'templates', 'reports')) {
+# Evidence location: evidence\ by default; -EvidencePath keeps run folders where they already are
+# ('.' = this folder, a relative path = under it, or an absolute path).
+$folders = @('', 'registers', 'config', 'findings', 'templates', 'reports')
+if ($EvidencePath) {
+    # Same rules as Get-EngagementPaths in EngagementPaths.ps1 (%ENVVARS% expanded)
+    $evx = [Environment]::ExpandEnvironmentVariables($EvidencePath)
+    $evFull = $(if ($evx -eq '.') { $Path } elseif ([IO.Path]::IsPathRooted($evx)) { $evx } else { Join-Path $Path $evx })
+}
+else { $folders += 'evidence'; $evFull = Join-Path $Path 'evidence' }
+foreach ($d in $folders) {
     $dir = $(if ($d) { Join-Path $Path $d } else { $Path })
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null; if ($d) { $created.Add("$d\") } }
 }
+# A relative or absolute -EvidencePath that does not exist yet is created, so the menu and console can open it
+if ($EvidencePath -and -not (Test-Path -LiteralPath $evFull)) { New-Item -ItemType Directory -Path $evFull -Force | Out-Null; $created.Add("$evFull\") }
 foreach ($c in $copies) {
     $rel = $c.To.Substring($Path.TrimEnd('\', '/').Length).TrimStart('\', '/')
     if (Test-Path -LiteralPath $c.To) { $kept.Add($rel); continue }
@@ -105,6 +127,7 @@ else {
         "    Name       = $(& $q $Name)"
         "    CreatedUtc = '$((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))'"
         "    KitVersion = '$ScriptVersion'"
+        $(if ($EvidencePath) { "    # Run folders live here instead of evidence\ ('.' = this folder)`r`n    EvidencePath = $(& $q $EvidencePath)" } else { "    # EvidencePath = '.'   # uncomment to keep run folders somewhere other than evidence\" })
         '}'
     ) -join [Environment]::NewLine
     Set-Content -LiteralPath $engFile -Value $engText -Encoding UTF8
@@ -116,7 +139,7 @@ $readme = Join-Path $Path 'README.md'
 if (Test-Path -LiteralPath $readme) { $kept.Add('README.md') }
 else {
     $tools = Join-Path $repoRoot 'tools'
-    $ev = Join-Path $Path 'evidence'; $rg = Join-Path $Path 'registers'; $cf = Join-Path $Path 'config'; $fd = Join-Path $Path 'findings'; $rp = Join-Path $Path 'reports'
+    $ev = $evFull; $rg = Join-Path $Path 'registers'; $cf = Join-Path $Path 'config'; $fd = Join-Path $Path 'findings'; $rp = Join-Path $Path 'reports'
     $t = { param($leaf) Join-Path $tools $leaf }
     $md = @"
 # $Name

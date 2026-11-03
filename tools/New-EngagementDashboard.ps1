@@ -20,6 +20,8 @@
                            the workbook does it. A section-title row above the headers is skipped
       -StatusRegisterCsv   status register (examples\status-register.example.csv): every item that is not
                            Completed, with rationale, owner, risk and disposition
+                           A row with a Script value (two-digit number) labels that script in the Discovery
+                           runs table when it has never run, e.g. "Deferred (register)" with the rationale
 
     Counts and statuses only. Run folders are read for counts and statuses, never for the data files, so
     the page holds no account names. The registers are shown as you wrote them: keep names out of them,
@@ -61,7 +63,7 @@
         -Title 'Identity programme dashboard' -OutputRoot D:\Engagement\reports
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.1.0
     Requires: PowerShell 5.1 or 7.x.
     Scopes  : none. Reads local files only.
     Licence : none
@@ -83,7 +85,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = 'New-EngagementDashboard'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.1.0'
 
 foreach ($p in @(@('EvidenceRoot', $EvidenceRoot), @('ReadinessCsv', $ReadinessCsv), @('FindingsCsv', $FindingsCsv), @('StatusRegisterCsv', $StatusRegisterCsv))) {
     if ($p[1] -and -not (Test-Path -LiteralPath $p[1])) { throw "-$($p[0]) not found: $($p[1])" }
@@ -446,6 +448,8 @@ footer{margin-top:36px;color:var(--muted);font-size:12.5px;border-top:1px solid 
     [void]$sb.Append("</div>`n")
 
     # ---- Discovery runs ----
+    $regByScript = @{}
+    if ($reg) { foreach ($x in $reg.Rows) { $n = "$(Get-Col $x 'Script')".Trim(); if ($n -match '^\d{1,2}$') { $regByScript[$n.PadLeft(2, '0')] = $x } } }
     [void]$sb.Append("<section><h2>Discovery runs</h2><p class=""lead"">Latest run of each script and what its datasets returned. Blocked = the run account lacked access; Unavailable = the tenant cannot produce it (often licensing); Deferred = skipped on purpose.</p>`n")
     if (-not $EvidenceRoot) { [void]$sb.Append((Get-NotProvided 'No evidence root.' 'Pass -EvidenceRoot.')) }
     else {
@@ -454,6 +458,15 @@ footer{margin-top:36px;color:var(--muted);font-size:12.5px;border-top:1px solid 
         [void]$sb.Append("</div>`n<div class=""table""><table><thead><tr><th>#</th><th>Script</th><th>Area</th><th>Last run</th><th class=""num"">Age (days)</th><th>Version</th><th class=""num"">Completed</th><th class=""num"">Partial</th><th class=""num"">Blocked</th><th class=""num"">Deferred</th><th class=""num"">Unavailable</th><th>Status</th></tr></thead><tbody>`n")
         foreach ($r in $runRows) {
             if (-not $r.Runs) {
+                # A script never run but recorded in the status register (Script column) shows that decision
+                $rr = $(if ($regByScript.ContainsKey([string]$r.Number)) { $regByScript[[string]$r.Number] } else { $null })
+                if ($rr) {
+                    $st = [string](Get-Col $rr 'EvidenceState'); if (-not $st) { $st = 'Deferred' }
+                    $kind = $(switch ($st) { 'Blocked' { 'bad' } 'EvidenceUnavailable' { 'warn' } 'Completed' { 'ok' } default { 'muted' } })
+                    $why = "$(Get-Col $rr 'ItemId'): $(Get-Col $rr 'Rationale')"
+                    [void]$sb.Append("<tr class=""notrun""><td>$($r.Number)</td><td>$(ConvertTo-HtmlText $r.Script)</td><td>$(ConvertTo-HtmlText $r.Area)</td><td colspan=""8"">Not run &middot; $(ConvertTo-HtmlText $why)</td><td>$(Get-Chip "$st (register)" $kind)</td></tr>`n")
+                    continue
+                }
                 [void]$sb.Append("<tr class=""notrun""><td>$($r.Number)</td><td>$(ConvertTo-HtmlText $r.Script)</td><td>$(ConvertTo-HtmlText $r.Area)</td><td>Not run</td><td class=""num""></td><td></td><td class=""num""></td><td class=""num""></td><td class=""num""></td><td class=""num""></td><td class=""num""></td><td>$(Get-Chip 'Not run' 'muted')</td></tr>`n")
                 continue
             }

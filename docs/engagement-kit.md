@@ -30,8 +30,14 @@ Every tool in the kit is local. None connects to anything or changes anything ou
 # 1. Create the engagement folder (outside this repository, in the approved evidence location)
 .\tools\New-Engagement.ps1 -Path D:\Engagements\Programme1 -Name 'Identity programme'
 
-# 2. Open the menu; every step below is one option
+# 2. Open the console (double-click tools\Start-EngagementConsole.cmd), or the text menu
 .\tools\Start-Engagement.ps1 -EngagementPath D:\Engagements\Programme1 -Server dc01.contoso.local
+```
+
+Already have an evidence folder full of run folders? Adopt it instead of starting a new one: the runs stay where they are.
+
+```powershell
+.\tools\New-Engagement.ps1 -Path $env:USERPROFILE\IAM-Evidence -Name 'Identity programme' -EvidencePath . -Force
 ```
 
 | Step | Menu | What you do | Tool |
@@ -69,6 +75,7 @@ The copied registers hold placeholder rows (`contoso`, `Role1`, `User1`). Replac
 |---|---|---|
 | `-Path` | required | The engagement folder. Refused if it is inside this repository |
 | `-Name` | required | Engagement name for the README and the dashboard title |
+| `-EvidencePath` | `evidence\` | Where the run folders live: `.` for the engagement folder itself (adopting an existing evidence folder), a relative path, or an absolute path. Written to `config\engagement.psd1`; every tool that takes the engagement folder reads it |
 | `-Force` | off | Use a folder that already has files in it. Only adds what is missing; never overwrites a file, so filled registers are safe |
 
 Without `-Force`, a folder with anything in it is refused.
@@ -87,6 +94,7 @@ A text menu for one engagement folder. It only calls the other tools with that f
 | 6 Dashboard | `New-EngagementDashboard.ps1` with evidence, `registers\readiness-checklist.csv`, `registers\status-register.csv` and `findings\findings-review.csv` when present |
 | 7 Show README | The engagement README, in the console |
 | 8 Draft findings | `New-FindingDrafts.ps1 -EvidenceRoot evidence -RulesPath config\finding-rules.psd1 -LedgerPath findings\finding-ledger.csv -ReviewTrailCsv findings\findings-review.csv` |
+| A | Engagement actions: this engagement's own scripts from `config\actions.psd1` |
 | D | Set the domain controller |
 | Q | Quit |
 
@@ -96,6 +104,38 @@ A text menu for one engagement folder. It only calls the other tools with that f
 | `-Server` | session value | Domain controller for the AD scripts. Asked for once and kept in `$global:IamEngagementServer` for the PowerShell window |
 | `-AuthMode` | `Delegated` | Sign-in mode for the access request |
 | `-Option` | menu | Run these options and exit, e.g. `-Option 5,8,6`. Option 3 needs the pick list, so it is skipped here |
+
+### Start-EngagementConsole
+
+The same steps as buttons, in a Windows window. **Double-click `tools\Start-EngagementConsole.cmd`**, or run `.\tools\Start-EngagementConsole.ps1 -CreateShortcut` once for a desktop icon. It opens the last engagement used; *Open engagement...* picks another; *New engagement...* sets up a folder (it runs `New-Engagement.ps1`, and adopts existing run folders with `-EvidencePath .` when it finds them).
+
+| Tab | What it does |
+|---|---|
+| Discovery | Every catalog script with its latest run, worst dataset status and age, and any status-register row for it (`Script` column). Tick scripts and press **Run selected** (`Start-Discovery.ps1 -Select`). **Readiness check** runs `-ListOnly`. Row colours: red Blocked, amber Partial or Unavailable, grey not run or deferred |
+| Delivery | Access request, evidence package, KPI summary, draft findings, dashboard (opened when built), latest dashboard, and the engagement's folders and README |
+| Engagement actions | Buttons from `config\actions.psd1`: scripts that belong to this engagement only (see [`examples/actions.example.psd1`](../examples/actions.example.psd1)). `New-Engagement.ps1` copies the example there; *Edit actions file* opens it in Notepad (and creates it from the example in an older engagement folder that has none) |
+
+Every command runs in its own PowerShell window with the command line at the top, so sign-in and input-file prompts work and the output stays on screen. The domain controller is saved per engagement folder in `%APPDATA%\IamEngagementKit\console.json` (with the last folder used). Otherwise the console writes only what *New engagement...* / setting a folder up creates (`New-Engagement.ps1`, never overwriting a file) and a missing `config\actions.psd1` copied from the example by *Edit actions file*.
+
+The console launches windows (`Start-Process`) and builds WPF controls (`New-Object`, `Add-Type`), so `Test-ReadOnly.ps1` reports it when pointed at it. That is expected for the launcher; it connects to nothing and changes nothing outside the engagement folder and its settings file, and every tool it starts is checked on its own.
+
+Requires Windows, Windows PowerShell 5.1 (the `.cmd` uses it) or PowerShell 7.
+
+### Engagement actions
+
+Engagement-specific scripts go in `<engagement>\config\actions.psd1`, so the kit itself never changes per engagement:
+
+```powershell
+@{
+    Actions = @(
+        @{ Name = 'Apply script dispositions'; Description = 'Status register and readiness from the working notes'
+           Script = '%USERPROFILE%\working-notes\scripts\Add-ScriptDispositions.ps1'
+           Arguments = @{ EngagementRoot = '{EngagementPath}' } }
+    )
+}
+```
+
+Tokens in `Script` and `Arguments`: `{EngagementPath}`, `{Evidence}`, `{Registers}`, `{Config}`, `{Findings}`, `{Reports}`, `{Kit}`, `{Server}`, plus `%ENVIRONMENT%` variables. A relative `Script` is under the iam_scripts folder.
 
 ### New-AccessRequest
 
@@ -133,7 +173,7 @@ One self-contained HTML page: no external files, fonts or scripts, light and dar
 | `-EvidenceRoot` | none | Latest run of each script: dataset counts by status, run age, version. Also the latest `Get-KpiSummary` run (its `kpi-summary.csv` is hash-checked) |
 | `-ReadinessCsv` | none | Readiness checklist: Closed / Waived / In progress / Open counts and the items still open |
 | `-FindingsCsv` | none | Review Trail CSV export: findings by stage, severity and client decision, and the list. A blank Stage is worked out the way the workbook does it |
-| `-StatusRegisterCsv` | none | Status register: every item not Completed, with rationale, owner, risk and disposition |
+| `-StatusRegisterCsv` | none | Status register: every item not Completed, with rationale, owner, risk and disposition. A row with a two-digit `Script` value labels that script in the runs table when it has never run (for example *Deferred (register)* with the rationale) |
 | `-Title` | `Engagement dashboard` | Heading |
 | `-StaleAfterDays` | `30` | Latest runs older than this are marked |
 | `-OutputRoot` | `-EvidenceRoot` | Use the engagement's `reports\` |
@@ -229,8 +269,9 @@ Gaps link to findings by ID and are counted on the Summary sheet. Keep them in a
 1. Pull the latest `iam_scripts` and run `.\tools\Test-ReadOnly.ps1`.
 2. `New-Engagement.ps1` to a new folder in that client's approved evidence location.
 3. Tune `config\` for the programme: deliverables, KPIs and targets, and finding thresholds. The defaults are a starting point, not a standard.
-4. Send the access request (option 1), selecting only the scripts in scope.
-5. Run the flow above.
+4. Put that engagement's own scripts, if any, in `config\actions.psd1`.
+5. Send the access request (option 1), selecting only the scripts in scope.
+6. Run the flow above, from the console or the menu.
 
 Nothing from one engagement folder is needed at the next. Start each one empty.
 

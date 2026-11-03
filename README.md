@@ -152,6 +152,8 @@ For work that moves through gates (baseline, pilot, staged change, operational h
 
 The [engagement kit](docs/engagement-kit.md) packages the whole workflow so it runs the same way at every client: one engagement folder, an access request generated from the script catalog, the readiness checklist, baseline runs, evidence package, KPIs, draft findings reviewed in a workbook, and a one-page dashboard.
 
+Double-click `tools\Start-EngagementConsole.cmd` for the point-and-click console, or use the text menu:
+
 ```powershell
 .\tools\New-Engagement.ps1 -Path D:\Engagements\Programme1 -Name 'Identity programme'        # folder, registers, config, workbook
 .\tools\Start-Engagement.ps1 -EngagementPath D:\Engagements\Programme1 -Server dc01.contoso.local   # menu for every step
@@ -207,6 +209,8 @@ iam_scripts/
 │   ├── New-EvidencePackage.ps1   evidence intake log, hash re-check and per-deliverable status
 │   ├── New-Engagement.ps1        creates an engagement folder: evidence, registers, config, findings, workbook, README
 │   ├── Start-Engagement.ps1      text menu for one engagement folder (every step of the kit)
+│   ├── Start-EngagementConsole.ps1  point-and-click console (WPF); double-click Start-EngagementConsole.cmd
+│   ├── EngagementPaths.ps1       shared helpers: engagement paths, actions, script states
 │   ├── New-AccessRequest.ps1     client access request (roles, permissions, inputs, licences) from the catalog
 │   ├── New-FindingDrafts.ps1     draft findings from summary metrics, with a ledger of stable finding IDs
 │   ├── New-EngagementDashboard.ps1  one-page HTML dashboard: runs, KPIs, readiness, findings, open items

@@ -18,8 +18,12 @@
       8  Draft findings     New-FindingDrafts      -EvidenceRoot <path>\evidence -LedgerPath <path>\findings\finding-ledger.csv
                             (config\finding-rules.psd1 when present, otherwise the repository's examples; IDs already in
                             findings\findings-review.csv are never reused)
+      A  Engagement actions: this engagement's own scripts from config\actions.psd1 (examples\actions.example.psd1)
       D  Set the domain controller for this session
       Q  Quit
+
+    config\engagement.psd1 may set EvidencePath (see New-Engagement.ps1 -EvidencePath) to keep the run folders
+    somewhere other than evidence\, and every option uses it.
 
     The domain controller is asked for once and kept in a session variable ($global:IamEngagementServer), so
     it is remembered when the menu is opened again in the same PowerShell window.
@@ -45,7 +49,7 @@
     Refresh the KPIs, draft findings and rebuild the dashboard, unattended.
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.1.0
     Requires: PowerShell 5.1 or 7.x.
     Scopes  : none itself; each tool documents its own.
 #>
@@ -58,24 +62,24 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$MenuVersion = '1.0.0'
+$MenuVersion = '1.1.0'
 
 if (-not (Test-Path -LiteralPath $EngagementPath -PathType Container)) { throw "Engagement folder not found: $EngagementPath. Create one with tools\New-Engagement.ps1." }
 $EngagementPath = (Resolve-Path -LiteralPath $EngagementPath).Path
+. (Join-Path $PSScriptRoot 'EngagementPaths.ps1')
+$ep = Get-EngagementPaths -EngagementPath $EngagementPath   # honours EvidencePath in config\engagement.psd1
 $paths = @{
-    Evidence   = Join-Path $EngagementPath 'evidence'
-    Reports    = Join-Path $EngagementPath 'reports'
-    Registers  = Join-Path $EngagementPath 'registers'
-    Config     = Join-Path $EngagementPath 'config'
-    Findings   = Join-Path $EngagementPath 'findings'
-    Readme     = Join-Path $EngagementPath 'README.md'
+    Evidence   = $ep.Evidence
+    Reports    = $ep.Reports
+    Registers  = $ep.Registers
+    Config     = $ep.Config
+    Findings   = $ep.Findings
+    Readme     = $ep.Readme
 }
 foreach ($k in 'Evidence', 'Reports', 'Registers', 'Config', 'Findings') {
     if (-not (Test-Path -LiteralPath $paths[$k])) { throw "Not an engagement folder: $($paths[$k]) is missing. Run tools\New-Engagement.ps1 -Path '$EngagementPath' -Name <name> -Force to add it." }
 }
-$name = Split-Path $EngagementPath -Leaf
-$engFile = Join-Path $paths.Config 'engagement.psd1'
-if (Test-Path -LiteralPath $engFile) { try { $e = Import-PowerShellDataFile -Path $engFile; if ($e.Name) { $name = [string]$e.Name } } catch { Write-Warning "config\engagement.psd1 could not be read: $($_.Exception.Message)" } }
+$name = $ep.Name
 
 if ($Server) { $global:IamEngagementServer = $Server }
 elseif (-not $global:IamEngagementServer -and $PSDefaultParameterValues -and $PSDefaultParameterValues['*-AD*:Server']) { $global:IamEngagementServer = [string]$PSDefaultParameterValues['*-AD*:Server'] }
@@ -139,6 +143,24 @@ function Invoke-MenuOption {
             if (Test-Path -LiteralPath $paths.Readme) { Write-Host ''; Get-Content -LiteralPath $paths.Readme | Out-Host }
             else { Write-Host '  No README.md in the engagement folder.' -ForegroundColor Yellow }
         }
+        'A' {
+            $acts = @(Get-EngagementActions -Paths $ep)
+            if (-not $acts.Count) { Write-Host '  No config\actions.psd1, or it lists no actions. Copy examples\actions.example.psd1 there to add some.' -ForegroundColor Yellow; return }
+            if ($script:Unattended) { Write-Host '  Option A lists the actions to pick from: run it from the menu.' -ForegroundColor Yellow; return }
+            for ($i = 0; $i -lt $acts.Count; $i++) { Write-Host ("  {0,2}  {1,-32} {2}" -f ($i + 1), $acts[$i].Name, $acts[$i].Description) }
+            $pick = Read-Host '  Action number (blank = back)'
+            if (-not $pick -or $pick -notmatch '^\d+$' -or [int]$pick -lt 1 -or [int]$pick -gt $acts.Count) { return }
+            $act = $acts[[int]$pick - 1]
+            $kit = Split-Path $PSScriptRoot -Parent
+            $scr = Expand-EngagementToken -Text ([string]$act.Script) -Paths $ep -Kit $kit -Server ([string]$global:IamEngagementServer)
+            if (-not [IO.Path]::IsPathRooted($scr)) { $scr = Join-Path $kit $scr }
+            if (-not (Test-Path -LiteralPath $scr)) { Write-Host "  Script not found: $scr" -ForegroundColor Red; return }
+            $a = @{}
+            if ($act.Arguments) { foreach ($k in $act.Arguments.Keys) { $a[$k] = Expand-EngagementToken -Text ([string]$act.Arguments[$k]) -Paths $ep -Kit $kit -Server ([string]$global:IamEngagementServer) } }
+            foreach ($sw in @($act.Switches)) { if ($sw) { $a[$sw] = [switch]$true } }
+            Write-Host "> $scr" -ForegroundColor DarkGray
+            try { & $scr @a | Out-Host } catch { Write-Host "  Failed: $($_.Exception.Message)" -ForegroundColor Red }
+        }
         'D' { [void](Get-Server -Ask); Write-Host "  Domain controller: $(if ($global:IamEngagementServer) { $global:IamEngagementServer } else { '(none)' })" }
         'Q' { $script:Quit = $true }
         '' { }
@@ -157,6 +179,7 @@ while (-not $script:Quit) {
     Write-Host ''
     Write-Host "Engagement: $name  (Start-Engagement $MenuVersion)" -ForegroundColor Cyan
     Write-Host "  Folder : $EngagementPath"
+    if ($paths.Evidence -ne (Join-Path $EngagementPath 'evidence')) { Write-Host "  Evidence: $($paths.Evidence)" }
     Write-Host "  DC     : $(if ($global:IamEngagementServer) { $global:IamEngagementServer } else { '(not set - D to set)' })"
     Write-Host ''
     Write-Host '  1  Access request          roles, permissions, inputs and licences for the client'
@@ -167,6 +190,7 @@ while (-not $script:Quit) {
     Write-Host '  6  Dashboard               one page: runs, KPIs, readiness, findings, open items'
     Write-Host '  7  Show README             run order and commands for this folder'
     Write-Host '  8  Draft findings          new findings from the latest runs, for the review workbook'
+    Write-Host '  A  Engagement actions      this engagement''s own scripts (config\actions.psd1)'
     Write-Host '  D  Set domain controller   Q  Quit'
     $choice = Read-Host 'Choose'
     if ($null -eq $choice) { break }   # end of input

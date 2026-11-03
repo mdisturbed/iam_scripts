@@ -1,3 +1,5 @@
 * text=auto
 # Hooks run under sh (Git for Windows too): must stay LF or they fail with "bad interpreter"
 .githooks/* text eol=lf
+# Windows batch files need CRLF
+*.cmd text eol=crlf

@@ -2,6 +2,21 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.11.0 - 2026-11-03
+
+Engagement console. The kit's steps as buttons, so running an engagement needs no typed commands, and a place for each engagement's own scripts so the kit never changes per engagement.
+
+### Added
+- `tools/Start-EngagementConsole.ps1` (1.0.0) and `tools/Start-EngagementConsole.cmd`: WPF console for an engagement folder. Discovery tab (catalog scripts with latest run, status, age and status-register note; tick and run), Delivery tab (access request, evidence package, KPIs, draft findings, dashboard, folders), Engagement actions tab (`config\actions.psd1`). Each command runs in its own PowerShell window. `-CreateShortcut` adds a desktop icon. Remembers the last engagement and the domain controller per engagement in `%APPDATA%\IamEngagementKit\console.json`. Reported by `Test-ReadOnly.ps1` by design (it launches windows); see `docs/engagement-kit.md`.
+- `tools/EngagementPaths.ps1`: shared helpers for engagement paths, actions and script states.
+- `examples/actions.example.psd1`: engagement actions file, copied to `config\actions.psd1` by `New-Engagement.ps1`.
+- `Start-Engagement.ps1` 1.1.0: option **A**, engagement actions.
+
+### Changed
+- `New-Engagement.ps1` 1.1.0: `-EvidencePath` adopts an existing evidence folder (`.`) or points at another one, written to `config\engagement.psd1`. `Start-Engagement.ps1` and the console read it.
+- `New-EngagementDashboard.ps1` 1.1.0: a status-register row with a `Script` value labels a script that has never run, e.g. *Deferred (register)* with the item ID and rationale, instead of *Not run*.
+- `examples/status-register.example.csv`: new optional `Script` column.
+
 ## 1.10.1 - 2026-10-29
 
 ### Added
