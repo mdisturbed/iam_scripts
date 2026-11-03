@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.11.1 - 2026-11-03
+
+### Added
+- `Start-EngagementConsole.ps1` 1.1.0: dark mode. *Auto* follows the Windows app mode; the **Theme** button in the header cycles Auto, Dark and Light and keeps the choice in `console.json`. Buttons, tabs, the script grid and the title bar follow the theme. Look only: no change to engagement folders, registers, run folders or the dashboard.
+
 ## 1.11.0 - 2026-11-03
 
 Engagement console. The kit's steps as buttons, so running an engagement needs no typed commands, and a place for each engagement's own scripts so the kit never changes per engagement.

@@ -115,6 +115,8 @@ The same steps as buttons, in a Windows window. **Double-click `tools\Start-Enga
 | Delivery | Access request, evidence package, KPI summary, draft findings, dashboard (opened when built), latest dashboard, and the engagement's folders and README |
 | Engagement actions | Buttons from `config\actions.psd1`: scripts that belong to this engagement only (see [`examples/actions.example.psd1`](../examples/actions.example.psd1)). `New-Engagement.ps1` copies the example there; *Edit actions file* opens it in Notepad (and creates it from the example in an older engagement folder that has none) |
 
+**Theme:** light or dark. *Auto* follows the Windows app mode (Settings > Personalization > Colors); the **Theme** button cycles Auto, Dark and Light and remembers the choice. Only the console's look changes.
+
 Every command runs in its own PowerShell window with the command line at the top, so sign-in and input-file prompts work and the output stays on screen. The domain controller is saved per engagement folder in `%APPDATA%\IamEngagementKit\console.json` (with the last folder used). Otherwise the console writes only what *New engagement...* / setting a folder up creates (`New-Engagement.ps1`, never overwriting a file) and a missing `config\actions.psd1` copied from the example by *Edit actions file*.
 
 The console launches windows (`Start-Process`) and builds WPF controls (`New-Object`, `Add-Type`), so `Test-ReadOnly.ps1` reports it when pointed at it. That is expected for the launcher; it connects to nothing and changes nothing outside the engagement folder and its settings file, and every tool it starts is checked on its own.

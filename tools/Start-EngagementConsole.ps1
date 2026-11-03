@@ -15,6 +15,9 @@
     Actions tab     the engagement's own entries from config\actions.psd1 (see examples\actions.example.psd1),
                     for scripts that belong to one engagement only.
 
+    Theme: light or dark. Auto (the default) follows the Windows app mode; the Theme button in the header
+    cycles Auto, Dark, Light and the choice is kept in console.json.
+
     Every command runs in its own PowerShell window, so sign-in prompts, input-file prompts and output stay
     visible, and the console stays responsive. The command line is shown at the top of that window.
 
@@ -41,7 +44,7 @@
     .\tools\Start-EngagementConsole.ps1 -CreateShortcut
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.1.0
     Requires: Windows, Windows PowerShell 5.1 or PowerShell 7.x (WPF). Started by the .cmd in STA mode.
     Scopes  : none itself; each tool documents its own.
 #>
@@ -52,7 +55,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$ConsoleVersion = '1.0.0'
+$ConsoleVersion = '1.1.0'
 # Started from the .cmd the PowerShell window is hidden: show a start-up failure instead of closing silently
 trap {
     $m = "The engagement console could not start:`n$($_.Exception.Message)"
@@ -96,11 +99,12 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
 $settingsDir = Join-Path $env:APPDATA 'IamEngagementKit'
 $settingsFile = Join-Path $settingsDir 'console.json'
 function Read-Settings {
-    $o = @{ LastEngagement = ''; Servers = @{} }
+    $o = @{ LastEngagement = ''; Servers = @{}; Theme = 'Auto' }
     if (Test-Path -LiteralPath $settingsFile) {
         try {
             $j = Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json
             if ($j.LastEngagement) { $o.LastEngagement = [string]$j.LastEngagement }
+            if ($j.Theme -in @('Auto', 'Light', 'Dark')) { $o.Theme = [string]$j.Theme }
             if ($j.Servers) { foreach ($p in $j.Servers.PSObject.Properties) { $o.Servers[$p.Name] = [string]$p.Value } }
         } catch { }
     }
@@ -108,7 +112,7 @@ function Read-Settings {
 }
 function Save-Settings {
     if (-not (Test-Path -LiteralPath $settingsDir)) { New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null }
-    ([pscustomobject]@{ LastEngagement = $script:Settings.LastEngagement; Servers = [pscustomobject]$script:Settings.Servers }) |
+    ([pscustomobject]@{ LastEngagement = $script:Settings.LastEngagement; Theme = $script:Settings.Theme; Servers = [pscustomobject]$script:Settings.Servers }) |
         ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $settingsFile -Encoding UTF8
 }
 $script:Settings = Read-Settings
@@ -157,19 +161,73 @@ function Open-Path([string]$Path) {
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Engagement console" Width="1240" Height="780" MinWidth="980" MinHeight="600"
-        WindowStartupLocation="CenterScreen" FontFamily="Segoe UI" FontSize="13" Background="#F5F6F8">
+        WindowStartupLocation="CenterScreen" FontFamily="Segoe UI" FontSize="13"
+        Background="{DynamicResource WindowBg}" Foreground="{DynamicResource Fg}">
   <Window.Resources>
+    <!-- Theme brushes: light values here; Set-Theme swaps them at run time (DynamicResource) -->
+    <SolidColorBrush x:Key="WindowBg" Color="#F5F6F8"/>
+    <SolidColorBrush x:Key="PanelBg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="PanelBorder" Color="#E1E4E8"/>
+    <SolidColorBrush x:Key="CtrlBg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="CtrlBorder" Color="#C9CED6"/>
+    <SolidColorBrush x:Key="CtrlHover" Color="#EEF2F7"/>
+    <SolidColorBrush x:Key="Fg" Color="#1B1F24"/>
+    <SolidColorBrush x:Key="FgMuted" Color="#5A6270"/>
+    <SolidColorBrush x:Key="FgDim" Color="#7A828E"/>
+    <SolidColorBrush x:Key="Accent" Color="#1F5FBF"/>
+    <SolidColorBrush x:Key="AccentHover" Color="#1A51A3"/>
+    <SolidColorBrush x:Key="AccentFg" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="RowBad" Color="#FDECEC"/>
+    <SolidColorBrush x:Key="RowWarn" Color="#FFF6E0"/>
+    <SolidColorBrush x:Key="RowSelected" Color="#DCE8FA"/>
+    <SolidColorBrush x:Key="GridLine" Color="#ECEEF1"/>
+    <SolidColorBrush x:Key="HeaderBg" Color="#F7F8FA"/>
+
+    <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Fg}"/></Style>
+    <Style x:Key="Muted" TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource FgMuted}"/></Style>
+
     <Style TargetType="Button">
       <Setter Property="Padding" Value="12,6"/>
       <Setter Property="Margin" Value="0,0,8,0"/>
-      <Setter Property="Background" Value="White"/>
-      <Setter Property="BorderBrush" Value="#C9CED6"/>
+      <Setter Property="Background" Value="{DynamicResource CtrlBg}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource CtrlHover}"/></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
     <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Background" Value="#1F5FBF"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderBrush" Value="#1F5FBF"/>
+      <Setter Property="Background" Value="{DynamicResource Accent}"/>
+      <Setter Property="Foreground" Value="{DynamicResource AccentFg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="1" CornerRadius="4" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentHover}"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
     <Style x:Key="Card" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
       <Setter Property="Width" Value="270"/>
@@ -179,30 +237,92 @@ function Open-Path([string]$Path) {
       <Setter Property="HorizontalContentAlignment" Value="Left"/>
       <Setter Property="VerticalContentAlignment" Value="Top"/>
     </Style>
+
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="{DynamicResource CtrlBg}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource CtrlBorder}"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource Fg}"/>
+    </Style>
+
+    <Style TargetType="TabControl">
+      <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}"/>
+    </Style>
+    <Style TargetType="TabItem">
+      <Setter Property="Foreground" Value="{DynamicResource FgMuted}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabItem">
+            <Border x:Name="Bd" Background="Transparent" BorderBrush="Transparent" BorderThickness="0,0,0,2" Padding="14,8" Margin="0,0,2,0">
+              <ContentPresenter ContentSource="Header" HorizontalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="{DynamicResource CtrlHover}"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="DataGrid">
+      <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+      <Setter Property="RowBackground" Value="{DynamicResource PanelBg}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}"/>
+      <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource GridLine}"/>
+    </Style>
+    <Style TargetType="DataGridColumnHeader">
+      <Setter Property="Background" Value="{DynamicResource HeaderBg}"/>
+      <Setter Property="Foreground" Value="{DynamicResource FgMuted}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PanelBorder}"/>
+      <Setter Property="BorderThickness" Value="0,0,1,1"/>
+      <Setter Property="Padding" Value="8,6"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style TargetType="DataGridCell">
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="6,0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="DataGridCell">
+            <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+              <ContentPresenter VerticalAlignment="Center"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </Window.Resources>
   <DockPanel>
-    <Border DockPanel.Dock="Top" Background="White" BorderBrush="#E1E4E8" BorderThickness="0,0,0,1" Padding="18,14">
+    <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,0,0,1" Padding="18,14">
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
         <StackPanel>
           <TextBlock x:Name="EngName" Text="No engagement open" FontSize="20" FontWeight="SemiBold"/>
-          <TextBlock x:Name="EngPath" Foreground="#5A6270" Margin="0,2,0,0"/>
-          <TextBlock x:Name="EvPath" Foreground="#5A6270"/>
+          <TextBlock x:Name="EngPath" Style="{StaticResource Muted}" Margin="0,2,0,0"/>
+          <TextBlock x:Name="EvPath" Style="{StaticResource Muted}"/>
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-          <TextBlock Text="Domain controller" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#5A6270"/>
+          <TextBlock Text="Domain controller" VerticalAlignment="Center" Margin="0,0,8,0" Style="{StaticResource Muted}"/>
           <TextBox x:Name="Server" Width="220" Padding="4,4" Margin="0,0,8,0" VerticalContentAlignment="Center"/>
           <Button x:Name="SaveServer" Content="Save"/>
           <Button x:Name="OpenEng" Content="Open engagement..."/>
-          <Button x:Name="NewEng" Content="New engagement..." Margin="0"/>
+          <Button x:Name="NewEng" Content="New engagement..."/>
+          <Button x:Name="ThemeBtn" Content="Theme: Auto" Margin="0" ToolTip="Auto follows the Windows app setting"/>
         </StackPanel>
       </Grid>
     </Border>
-    <Border DockPanel.Dock="Bottom" Background="White" BorderBrush="#E1E4E8" BorderThickness="0,1,0,0" Padding="18,6">
-      <TextBlock x:Name="Status" Foreground="#5A6270" TextTrimming="CharacterEllipsis"/>
+    <Border DockPanel.Dock="Bottom" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource PanelBorder}" BorderThickness="0,1,0,0" Padding="18,6">
+      <TextBlock x:Name="Status" Style="{StaticResource Muted}" TextTrimming="CharacterEllipsis"/>
     </Border>
-    <TabControl Margin="14" Padding="12" Background="White">
-      <TabItem Header="  Discovery  ">
+    <TabControl Margin="14" Padding="12">
+      <TabItem Header="Discovery">
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
             <Button x:Name="RunSel" Content="Run selected" Style="{StaticResource Primary}"/>
@@ -211,11 +331,10 @@ function Open-Path([string]$Path) {
             <Button x:Name="SelNone" Content="Clear"/>
             <Button x:Name="Readiness" Content="Readiness check"/>
             <Button x:Name="Refresh" Content="Refresh"/>
-            <TextBlock x:Name="Counts" VerticalAlignment="Center" Margin="8,0,0,0" Foreground="#5A6270"/>
+            <TextBlock x:Name="Counts" VerticalAlignment="Center" Margin="8,0,0,0" Style="{StaticResource Muted}"/>
           </StackPanel>
           <DataGrid x:Name="Grid" AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
-                    HeadersVisibility="Column" GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#ECEEF1"
-                    RowHeight="28" SelectionMode="Extended" BorderBrush="#E1E4E8" Background="White">
+                    HeadersVisibility="Column" GridLinesVisibility="Horizontal" RowHeight="28" SelectionMode="Extended">
             <DataGrid.Columns>
               <DataGridTemplateColumn Header="Run" Width="44" SortMemberPath="Run">
                 <DataGridTemplateColumn.CellTemplate>
@@ -235,32 +354,35 @@ function Open-Path([string]$Path) {
             </DataGrid.Columns>
             <DataGrid.RowStyle>
               <Style TargetType="DataGridRow">
+                <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+                <Setter Property="Foreground" Value="{DynamicResource Fg}"/>
                 <Style.Triggers>
-                  <DataTrigger Binding="{Binding Tone}" Value="bad"><Setter Property="Background" Value="#FDECEC"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Tone}" Value="warn"><Setter Property="Background" Value="#FFF6E0"/></DataTrigger>
-                  <DataTrigger Binding="{Binding Tone}" Value="mut"><Setter Property="Foreground" Value="#7A828E"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Tone}" Value="bad"><Setter Property="Background" Value="{DynamicResource RowBad}"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Tone}" Value="warn"><Setter Property="Background" Value="{DynamicResource RowWarn}"/></DataTrigger>
+                  <DataTrigger Binding="{Binding Tone}" Value="mut"><Setter Property="Foreground" Value="{DynamicResource FgDim}"/></DataTrigger>
+                  <Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{DynamicResource RowSelected}"/></Trigger>
                 </Style.Triggers>
               </Style>
             </DataGrid.RowStyle>
           </DataGrid>
         </DockPanel>
       </TabItem>
-      <TabItem Header="  Delivery  ">
+      <TabItem Header="Delivery">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel>
-            <TextBlock Text="Build" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="#5A6270"/>
+            <TextBlock Text="Build" FontWeight="SemiBold" Margin="0,0,0,8" Style="{StaticResource Muted}"/>
             <WrapPanel x:Name="BuildCards"/>
-            <TextBlock Text="Open" FontWeight="SemiBold" Margin="0,8,0,8" Foreground="#5A6270"/>
+            <TextBlock Text="Open" FontWeight="SemiBold" Margin="0,8,0,8" Style="{StaticResource Muted}"/>
             <WrapPanel x:Name="OpenCards"/>
           </StackPanel>
         </ScrollViewer>
       </TabItem>
-      <TabItem Header="  Engagement actions  ">
+      <TabItem Header="Engagement actions">
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
             <Button x:Name="EditActions" Content="Edit actions file"/>
             <Button x:Name="ReloadActions" Content="Reload"/>
-            <TextBlock x:Name="ActionsInfo" VerticalAlignment="Center" Foreground="#5A6270"/>
+            <TextBlock x:Name="ActionsInfo" VerticalAlignment="Center" Style="{StaticResource Muted}"/>
           </StackPanel>
           <ScrollViewer VerticalScrollBarVisibility="Auto"><WrapPanel x:Name="ActionCards"/></ScrollViewer>
         </DockPanel>
@@ -277,10 +399,71 @@ $window.Dispatcher.Add_UnhandledException({
     })
 $ui = @{}
 foreach ($n in 'EngName', 'EngPath', 'EvPath', 'Server', 'SaveServer', 'OpenEng', 'NewEng', 'Status', 'RunSel', 'SelNotRun', 'SelBlocked', 'SelNone',
-    'Readiness', 'Refresh', 'Counts', 'Grid', 'BuildCards', 'OpenCards', 'EditActions', 'ReloadActions', 'ActionsInfo', 'ActionCards') {
+    'Readiness', 'Refresh', 'Counts', 'Grid', 'BuildCards', 'OpenCards', 'EditActions', 'ReloadActions', 'ActionsInfo', 'ActionCards', 'ThemeBtn') {
     $ui[$n] = $window.FindName($n)
 }
 function Set-Status([string]$t) { $ui.Status.Text = "$((Get-Date).ToString('HH:mm:ss'))  $t" }
+
+# ------------------------------------------------------------------ theme
+# Light and dark palettes for the brushes in Window.Resources. Auto follows the Windows app setting
+# (Settings > Personalization > Colors > app mode). Only the console's look changes; nothing on disk but the
+# Theme value in console.json.
+$script:Palettes = @{
+    Light = @{ WindowBg = '#F5F6F8'; PanelBg = '#FFFFFF'; PanelBorder = '#E1E4E8'; CtrlBg = '#FFFFFF'; CtrlBorder = '#C9CED6'; CtrlHover = '#EEF2F7'
+        Fg = '#1B1F24'; FgMuted = '#5A6270'; FgDim = '#7A828E'; Accent = '#1F5FBF'; AccentHover = '#1A51A3'; AccentFg = '#FFFFFF'
+        RowBad = '#FDECEC'; RowWarn = '#FFF6E0'; RowSelected = '#DCE8FA'; GridLine = '#ECEEF1'; HeaderBg = '#F7F8FA' }
+    Dark  = @{ WindowBg = '#16181C'; PanelBg = '#1E2127'; PanelBorder = '#2E333B'; CtrlBg = '#262A31'; CtrlBorder = '#3A4049'; CtrlHover = '#30353D'
+        Fg = '#E6E8EB'; FgMuted = '#A0A7B2'; FgDim = '#7D8490'; Accent = '#3B82F6'; AccentHover = '#5A96F7'; AccentFg = '#FFFFFF'
+        RowBad = '#3B2326'; RowWarn = '#3A3221'; RowSelected = '#24395C'; GridLine = '#2A2E35'; HeaderBg = '#23272D' }
+}
+
+function Test-WindowsDarkMode {
+    try {
+        $v = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -Name AppsUseLightTheme -ErrorAction Stop
+        return ($v.AppsUseLightTheme -eq 0)
+    } catch { return $false }
+}
+
+$script:DwmReady = $false
+try {
+    Add-Type -Namespace IamKit -Name Dwm -MemberDefinition '[DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);' -ErrorAction Stop
+    $script:DwmReady = $true
+} catch { }
+
+function Set-TitleBar([bool]$Dark) {
+    # Dark title bar on Windows 10 2004+ / 11 (attribute 20; 19 on older builds). Cosmetic: failures are ignored.
+    if (-not $script:DwmReady) { return }
+    try {
+        $hwnd = (New-Object System.Windows.Interop.WindowInteropHelper $window).Handle
+        if ($hwnd -eq [IntPtr]::Zero) { return }
+        $v = [int]$Dark
+        if ([IamKit.Dwm]::DwmSetWindowAttribute($hwnd, 20, [ref]$v, 4) -ne 0) { [void][IamKit.Dwm]::DwmSetWindowAttribute($hwnd, 19, [ref]$v, 4) }
+    } catch { }
+}
+
+function Set-Theme([string]$Mode) {
+    $dark = $(switch ($Mode) { 'Dark' { $true } 'Light' { $false } default { Test-WindowsDarkMode } })
+    $pal = $script:Palettes[$(if ($dark) { 'Dark' } else { 'Light' })]
+    $conv = New-Object System.Windows.Media.BrushConverter
+    foreach ($k in $pal.Keys) {
+        $b = $conv.ConvertFromString($pal[$k]); $b.Freeze()
+        $window.Resources[$k] = $b
+    }
+    $ui.ThemeBtn.Content = "Theme: $Mode"
+    $script:IsDark = $dark
+    Set-TitleBar $dark
+}
+
+$ui.ThemeBtn.Add_Click({
+        $next = @{ Auto = 'Dark'; Dark = 'Light'; Light = 'Auto' }[$script:Settings.Theme]
+        if (-not $next) { $next = 'Auto' }
+        $script:Settings.Theme = $next
+        Set-Theme $next
+        Save-Settings
+        Set-Status "Theme: $next$(if ($next -eq 'Auto') { ' (follows Windows)' })"
+    })
+$window.Add_SourceInitialized({ Set-TitleBar $script:IsDark })
+Set-Theme $script:Settings.Theme
 
 $table = New-Object System.Data.DataTable
 foreach ($c in 'Number', 'Title', 'Area', 'Needs', 'LastRun', 'State', 'Note', 'Tone') { [void]$table.Columns.Add($c, [string]) }
@@ -301,13 +484,12 @@ function New-Card {
     $sp = New-Object System.Windows.Controls.StackPanel
     $t1 = New-Object System.Windows.Controls.TextBlock; $t1.Text = $Title; $t1.FontWeight = [System.Windows.FontWeights]::SemiBold; $t1.FontSize = 14
     $t2 = New-Object System.Windows.Controls.TextBlock; $t2.Text = $Text; $t2.TextWrapping = [System.Windows.TextWrapping]::Wrap
-    $t2.Foreground = $script:Muted; $t2.Margin = New-Object System.Windows.Thickness(0, 4, 0, 0); $t2.Width = 240
+    $t2.SetResourceReference([System.Windows.Controls.TextBlock]::ForegroundProperty, 'FgMuted'); $t2.Margin = New-Object System.Windows.Thickness(0, 4, 0, 0); $t2.Width = 240
     [void]$sp.Children.Add($t1); [void]$sp.Children.Add($t2)
     $b.Content = $sp
     $b.Add_Click($OnClick)
     [void]$Panel.Children.Add($b)
 }
-$script:Muted = (New-Object System.Windows.Media.BrushConverter).ConvertFromString('#5A6270')
 
 function Assert-Engagement {
     if (-not $script:P) { [System.Windows.MessageBox]::Show('Open an engagement first.', 'Engagement console') | Out-Null; return $false }
