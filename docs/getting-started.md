@@ -121,6 +121,11 @@ Every script with typical parameters. Point `-OutputRoot` at the approved eviden
 .\scripts\30-Get-AccessReviewEvidence.ps1  -SinceDays 180 -OutputRoot D:\Evidence
 .\scripts\31-Get-LicenceInventory.ps1      -EvidenceRoot D:\Evidence -OutputRoot D:\Evidence   # licence confirmation; run first, and again after the pass
 
+# 7c. Offline analysis of earlier runs (no sign-in; run after their sources)
+.\scripts\32-Get-MfaEffectiveness.ps1     -OutputRoot D:\Evidence                       # after 01 and 27
+.\scripts\33-Get-CaPolicyAnalysis.ps1     -OutputRoot D:\Evidence                       # after 28 (27, 01 optional)
+.\scripts\34-Get-PrivilegedRegister.ps1   -OutputRoot D:\Evidence -NoPamPlatform        # after 02, 04 (22, 27, 11, 17, 18, 26 optional)
+
 # 7. AWS (credential profile, or a read-only role in every account)
 .\scripts\17-Get-AwsIamPosture.ps1 -ProfileName audit -AllOrganizationAccounts -AssumeRoleName IAMDiscoveryReadOnly -IncludeIdentityCenter -OutputRoot D:\Evidence
 

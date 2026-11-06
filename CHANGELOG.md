@@ -2,6 +2,21 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.12.0 - 2026-11-06
+
+Three offline analysis scripts. Each reads earlier run folders only, checks every source file's SHA-256 against the hash its run recorded (a file edited after its run is Blocked, not used), and lists every source in `source-runs.csv`. They need no sign-in and no new access.
+
+### Added
+- `32-Get-MfaEffectiveness.ps1` (1.0.0): MFA coverage and effectiveness against the agreed population from 27. For each population (human workforce, admin accounts, guests, break-glass, Entra role holders), it gives registered, enforced by a baseline MFA policy, excluded (by user, group, role or guest type), protected, and successful single-factor sign-ins. Each measure has a value, denominator, percent, definition, source runs and status. Also gives exclusions with approval from an optional exception register, failures with a likely cause, and the policies counted as baseline. Without 27 the denominator falls back to every enabled member account and every measure is Partial. A measure that can't be computed is blank, never zero.
+- `33-Get-CaPolicyAnalysis.ps1` (1.0.0): Conditional Access inventory and analysis from a 28 snapshot. One row per policy covers scope, controls, exclusions, state, purpose and dependencies (deleted references found). Issues include tenant baseline gaps mapped to CISA SCuBA and Maester IDs; conflicts (a block policy that covers another enabled policy, the same object included and excluded, conflicting sign-in frequency); overlaps (duplicate, redundant, same scope with different controls, report-only copy); exclusion risks (break-glass not excluded, exclusion with no fallback, large excluded groups, MFA skipped from trusted locations); and hygiene (stale report-only or disabled policies, no controls, security defaults with CA). Comparison is exact, not a sign-in simulation.
+- `34-Get-PrivilegedRegister.ps1` (1.0.0): privileged identity and role register from 02, 04, 11, 17, 18, 22, 26 and 27. Each account row has privilege, Tier 0, standing or just-in-time, suggested and attested owner and purpose, vault status, evidence state and managed / unmanaged with reasons. Also writes a role register and an attestation worksheet to send to owners; their answers come back with `-AttestationCsv`. `-NoPamPlatform` records that no vault exists.
+- `examples/privileged-attestation.example.csv`.
+- Catalog entries for 32 to 34 (offline: `Needs` is empty). Finding rules R-32-01, R-33-01, R-33-02, R-34-01 and R-34-02. Scripts 32 and 33 added to deliverable D02 and 34 to D03 in the example deliverable map.
+
+### Testing
+- Run end to end on PowerShell 7.4 against mock run folders with placeholder data, including no 27 run, a Blocked optional source, an edited source file, `-BreakGlassUpns` without 27, an attestation file with unapproved and break-glass rows, and `-NoPamPlatform`. Results were checked against the values the mock data should produce. Found and fixed before release: a case-insensitive variable collision in policy comparison (the same class of bug as script 04's), an empty include list treated as non-empty, empty checks reported as Pass, and Blocked measures shown as 0. An independent review then found 12 more issues, all fixed and retested. In 32: `-MfaPolicyNames` treated scoped or report-only policies as covering everyone; an empty exception register approved nothing but reported no gaps; guest-type exclusions ignored the guest type; and exception rows for other controls counted. In 33: unmodelled conditions (insider risk) produced false `BlockShadowsPolicy`; a `-BreakGlassUpns` account that no policy referenced passed; policies targeting roles or groups skipped the break-glass check; and the no-fallback test ignored conditions. In 34: Blocked workload or service-account sources didn't make the register Partial, and an attested *Not vaulted* counted as vaulted.
+- `Test-ReadOnly.ps1` and the guardrail pass. PSScriptAnalyzer was not run in the build environment (no PowerShell Gallery access); run it locally before handing the scripts to others.
+
 ## 1.11.2 - 2026-11-03
 
 ### Fixed

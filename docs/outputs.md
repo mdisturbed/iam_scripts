@@ -74,6 +74,9 @@ The CSVs contain identity data (names, UPNs, sign-in activity, group membership,
 - [29 Pilot outcome](scripts/29-pilot-outcome.md#output): `pilot-test-results.csv`, `pilot-signin-evidence.csv`, `pilot-scope-check.csv`, `pilot-scope-leak.csv`
 - [30 Access review evidence](scripts/30-access-review-evidence.md#output): `review-instances.csv`, `review-decisions.csv`, `review-exceptions.csv`
 - [31 Licence inventory](scripts/31-licence-inventory.md#output): `licence-skus.csv`, `licence-service-plans.csv`, `licence-capabilities.csv`; with `-EvidenceRoot`: `licence-gaps-observed.csv`
+- [32 MFA effectiveness](scripts/32-mfa-effectiveness.md#output): `mfa-effectiveness-measures.csv`, `mfa-effectiveness.csv`, `mfa-exclusions.csv`, `mfa-failures.csv`, `mfa-baseline-policies.csv`, `source-runs.csv`
+- [33 CA policy analysis](scripts/33-ca-policy-analysis.md#output): `ca-policy-inventory.csv`, `ca-policy-issues.csv`, `ca-policy-dependencies.csv`, `ca-coverage-checks.csv`, `source-runs.csv`
+- [34 Privileged register](scripts/34-privileged-register.md#output): `privileged-register.csv`, `privileged-roles.csv`, `privileged-attestation-worksheet.csv`, `source-runs.csv`
 - [Evidence tools](evidence-tools.md): Compare-RunFolders `run-diff-summary.csv`, `run-diff-rows.csv`, `metric-diff.csv`, `input-verification.csv`; Get-KpiSummary `kpi-summary.csv`; New-EvidencePackage `evidence-intake-log.csv`, `evidence-datasets.csv`, `deliverable-status.csv`, `evidence-index.md`, `package-manifest.csv`
 
 [← Back to README](../README.md)

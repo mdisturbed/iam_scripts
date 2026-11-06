@@ -84,6 +84,9 @@ Pick one or two facts per script that you can confirm independently in the porta
 | 29 Pilot outcome | One test case's evidence sign-in (`CorrelationId`) opens in the Entra sign-in log and its Conditional Access tab shows the same result |
 | 30 Access review evidence | One completed review's decision counts match **Identity Governance > Access reviews > (review) > Results**; one known deny shows its apply result |
 | 31 Licence inventory | SKU counts (`Enabled`, `Consumed`) match **Microsoft 365 admin center > Billing > Licenses** for each product; one capability you know is licensed shows `Present = True` |
+| 32 MFA effectiveness | The workforce denominator matches 27's `Human workforce enabled (Entra)`; one user in an excluded group shows `Excluded` with that group in `ExclusionVia` |
+| 33 CA policy analysis | Policy count and states match **Entra > Conditional Access**; one issue per category confirmed in the portal (What If for `BlockShadowsPolicy`) |
+| 34 Privileged register | Your admin account shows with the right roles and your workforce account as `SuggestedOwner`; Domain Admins holder count matches AD |
 
 ## Tuning on first run
 
@@ -113,6 +116,9 @@ Expect to adjust these on the first run and record the values used. They're writ
 | 29 | `-LookbackHours`, `NotBeforeUtc` per case so only sign-ins after the change count |
 | 30 | `-SinceDays`, `-DefinitionNameLike` to the reviews in scope |
 | 31 | `-CapabilityMap` if the readiness gate needs capabilities the default map doesn't cover |
+| 32 | `-MfaPolicyNames` when MFA is enforced through scoped policies |
+| 33 | `-BreakGlassUpns`, `-BroadExclusionThreshold` |
+| 34 | `-NoPamPlatform` when there is no vault; `-AdminAffixPatterns` to your admin naming standard |
 | 14 | Column names, `-SystemName`, status value lists |
 
 ## Reporting a problem
@@ -170,3 +176,6 @@ When a script is pilot-verified, hand it over with:
 | 29 Pilot outcome | 1.0.1 | | | | | Mock-tested |
 | 30 Access review evidence | 1.0.1 | | | | | Mock-tested |
 | 31 Licence inventory | 1.0.0 | | | | | Mock-tested |
+| 32 MFA effectiveness | 1.0.0 | | | | | Mock-tested |
+| 33 CA policy analysis | 1.0.0 | | | | | Mock-tested |
+| 34 Privileged register | 1.0.0 | | | | | Mock-tested |

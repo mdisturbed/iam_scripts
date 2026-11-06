@@ -212,5 +212,20 @@
            OtherAccess = @()
            Inputs = @()
            Licence = '' }
+        @{ Number = '32'; Title = 'MFA effectiveness';                    Area = 'Entra';      Needs = @(); Note = 'Offline. Run after 01 and 27 (with the HR file) into the same evidence folder.'
+           Roles = @(); Scopes = @(); OptionalScopes = @()
+           OtherAccess = @('Earlier runs of 01 and 27 in the same evidence folder')
+           Inputs = @( @{ Name = 'Exception register'; Parameter = '-ExceptionRegisterCsv'; Template = 'exception-register.example.csv'; Required = $false } )
+           Licence = '' }
+        @{ Number = '33'; Title = 'CA policy analysis';                   Area = 'Entra';      Needs = @(); Note = 'Offline. Run after 28 (27 and 01 add break-glass and excluded-group checks).'
+           Roles = @(); Scopes = @(); OptionalScopes = @()
+           OtherAccess = @('An earlier run of 28 in the same evidence folder (27 and 01 optional)')
+           Inputs = @( @{ Name = 'Break-glass account UPNs'; Parameter = '-BreakGlassUpns'; Template = ''; Required = $false } )
+           Licence = '' }
+        @{ Number = '34'; Title = 'Privileged register';                  Area = 'Privileged access'; Needs = @(); Note = 'Offline. Run after 02 and 04 (22, 27, 11, 17, 18, 26 when available); rerun with the attestation file.'
+           Roles = @(); Scopes = @(); OptionalScopes = @()
+           OtherAccess = @('Earlier runs of 02 and 04 (and 11, 17, 18, 22, 26, 27) in the same evidence folder')
+           Inputs = @( @{ Name = 'Owner and purpose attestations'; Parameter = '-AttestationCsv'; Template = 'privileged-attestation.example.csv'; Required = $false } )
+           Licence = '' }
     )
 }

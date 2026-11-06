@@ -110,4 +110,4 @@ General issues: [troubleshooting](../troubleshooting.md).
 
 ---
 
-[← 30 Access review evidence](30-access-review-evidence.md) · [All scripts](README.md)
+[← 30 Access review evidence](30-access-review-evidence.md) · [All scripts](README.md) · [32 MFA effectiveness →](32-mfa-effectiveness.md)

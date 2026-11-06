@@ -59,6 +59,8 @@
                 @{ Script = '24'; Datasets = @('ca-policy-results', 'ca-reportonly-impact') }
                 @{ Script = '28'; Datasets = @('ca-policies.json', 'ca-policies.csv', 'named-locations.json', 'authentication-strengths.json', 'authentication-methods-policy.json') }
                 @{ Script = '29'; Datasets = @('pilot-test-results') }
+                @{ Script = '32'; Datasets = @('mfa-effectiveness-measures', 'mfa-exclusions', 'mfa-failures') }
+                @{ Script = '33'; Datasets = @('ca-policy-inventory', 'ca-policy-issues', 'ca-coverage-checks') }
             )
         }
         @{
@@ -70,6 +72,7 @@
                 @{ Script = '02'; Datasets = @('privileged-users', 'privileged-principals-effective') }
                 @{ Script = '04'; Datasets = @('ad-privileged-accounts', 'ad-admincount-orphans', 'ad-service-account-candidates') }
                 @{ Script = '26'; Datasets = @('privileged-vault-coverage', 'pam-entries-unmatched', 'source-runs') }
+                @{ Script = '34'; Datasets = @('privileged-register', 'privileged-roles') }
             )
         }
         @{

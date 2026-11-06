@@ -1,0 +1,5 @@
+Identity,Owner,Purpose,AttestedBy,AttestedOnUtc,ReviewByUtc,VaultStatus,Notes
+adm-user1@contoso.local,user1@contoso.local,Tier 0 administration for User1's team,Role2,2026-11-06T00:00:00Z,2027-05-06T00:00:00Z,,
+svc-app1,Role3,Service account for App1 nightly job,Role2,2026-11-06T00:00:00Z,2027-11-06T00:00:00Z,,Interactive logon denied by GPO
+bg1@contoso.local,Role1,Emergency access (break-glass),Role2,2026-11-06T00:00:00Z,2027-05-06T00:00:00Z,Sealed (break-glass procedure),Credentials split and stored in two safes
+role:Entra:Global Administrator,Role1,Tenant administration,Role2,2026-11-06T00:00:00Z,2027-05-06T00:00:00Z,,

@@ -39,6 +39,9 @@ Everything here is read-only. Ask for the narrowest option that works and, where
 | 29 Pilot outcome | Global Reader or Security Reader | AuditLog.Read.All, Policy.Read.All, Directory.Read.All (+ GroupMember.Read.All with `-PilotGroupId`) | Test-case file | Graph Auth |
 | 30 Access review evidence | Global Reader | AccessReview.Read.All, Directory.Read.All, RoleManagement.Read.Directory, PrivilegedEligibilitySchedule.Read.AzureADGroup | | Graph Auth |
 | 31 Licence inventory | Global Reader or Directory Readers | Directory.Read.All by default; LicenseAssignment.Read.All or Organization.Read.All with `-GraphScope` | Read access to the evidence folder for `-EvidenceRoot` | Graph Auth |
+| 32 MFA effectiveness | | | Earlier runs of 01 and 27; exception register (optional) | none |
+| 33 CA policy analysis | | | An earlier run of 28 (27 and 01 optional) | none |
+| 34 Privileged register | | | Earlier runs of 02 and 04 (11, 17, 18, 22, 26, 27 optional); attestation file (optional) | none |
 | Tools: Compare-RunFolders, Get-KpiSummary, New-EvidencePackage, New-FindingDrafts, New-EngagementDashboard, New-AccessRequest, New-Engagement, Start-Engagement | | | Read access to the evidence folder; write access to their own output folder (New-FindingDrafts also writes the finding ledger and evidence notes; New-Engagement the new engagement folder) | none |
 
 Items in brackets apply only when the matching optional switch is used.

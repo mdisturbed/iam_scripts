@@ -562,5 +562,35 @@
            Population = 'Script runs scanned'
            Severity = 'Low'; HitrustCsf = '09.ab Monitoring System Use'; ZtPillar = 'Governance'; ZtPrinciple = 'Verify explicitly'
            Recommendation = 'Record each gap in the status register with its risk, and decide per gap whether to license, compensate or accept' }
+        @{ RuleId = 'R-32-01'; Script = '32-MfaEffectiveness'; Metric = 'Human workforce enabled (Entra) - Excluded from every baseline MFA policy'; Condition = 'GreaterThan'; Threshold = 0
+           Finding = 'Workforce accounts excluded from every baseline MFA policy'
+           Population = 'Human workforce enabled (Entra) - Population (denominator)'
+           Severity = 'High'; HitrustCsf = '01.q User Identification and Authentication'; ZtPillar = 'Identity'; ZtPrinciple = 'Verify explicitly'
+           Recommendation = 'Remove exclusions that have no approved, time-bound exception; give the rest a compensating policy'
+           Dataset = 'mfa-effectiveness' }
+        @{ RuleId = 'R-33-01'; Script = '33-CaPolicyAnalysis'; Metric = 'Issues: Conflict'; Condition = 'GreaterThan'; Threshold = 0
+           Finding = 'Conditional Access policies that conflict (one can never take effect, or includes and excludes the same object)'
+           Population = 'Policies'
+           Severity = 'Medium'; HitrustCsf = '01.v Information Access Restriction'; ZtPillar = 'Identity'; ZtPrinciple = 'Verify explicitly'
+           Recommendation = 'Resolve each conflict in ca-policy-issues so every policy has one clear effect, through change control with a 28 snapshot before and after'
+           Dataset = 'ca-policy-issues' }
+        @{ RuleId = 'R-33-02'; Script = '33-CaPolicyAnalysis'; Metric = 'Deleted references'; Condition = 'GreaterThan'; Threshold = 0
+           Finding = 'Conditional Access policies refer to users, groups or apps that no longer exist'
+           Population = 'Policies'
+           Severity = 'Low'; HitrustCsf = '01.v Information Access Restriction'; ZtPillar = 'Identity'; ZtPrinciple = 'Verify explicitly'
+           Recommendation = 'Remove the stale references; confirm a deleted excluded group was not the only record of an exception'
+           Dataset = 'ca-policy-dependencies' }
+        @{ RuleId = 'R-34-01'; Script = '34-PrivilegedRegister'; Metric = 'Unmanaged'; Condition = 'GreaterThan'; Threshold = 0
+           Finding = 'Privileged identities without an attested owner and purpose, or with standing access that is not vaulted'
+           Population = 'Privileged identities (enabled or unknown)'
+           Severity = 'High'; HitrustCsf = '01.c Privilege Management'; ZtPillar = 'Identity'; ZtPrinciple = 'Use least privilege'
+           Recommendation = 'Attest owner and purpose for every privileged identity; move standing Tier 0 access to just-in-time or a vault'
+           Dataset = 'privileged-register' }
+        @{ RuleId = 'R-34-02'; Script = '34-PrivilegedRegister'; Metric = 'No owner found at all'; Condition = 'GreaterThan'; Threshold = 0
+           Finding = 'Privileged identities with no identifiable owner'
+           Population = 'Privileged identities (enabled or unknown)'
+           Severity = 'Medium'; HitrustCsf = '01.c Privilege Management'; ZtPillar = 'Identity'; ZtPrinciple = 'Use least privilege'
+           Recommendation = 'Assign an owner or disable the account after a documented check'
+           Dataset = 'privileged-register' }
     )
 }

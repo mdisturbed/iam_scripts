@@ -57,6 +57,9 @@ Each links to its page: what it collects, parameters, output files, permissions,
 | 29 | [Pilot outcome](docs/scripts/29-pilot-outcome.md) | Did each pilot test case, expected and adverse, give the result it should, and which sign-in proves it? | Entra sign-in logs + test-case file |
 | 30 | [Access review evidence](docs/scripts/30-access-review-evidence.md) | For each access review that ran, who reviewed what, what did they decide and why, and were removals applied? | Entra ID Governance |
 | 31 | [Licence inventory](docs/scripts/31-licence-inventory.md) | Which Microsoft licences and service plans does the tenant actually have, how many are assigned, and which licence-dependent evidence could not be collected? | Entra (+ evidence folder) |
+| 32 | [MFA effectiveness](docs/scripts/32-mfa-effectiveness.md) | Out of the agreed population, how many identities are actually protected by MFA, who is excluded and why, where did MFA fail in practice, and which evidence does each number come from? | 01 + 27 runs (+ exception register) | 1.0.0 |
+| 33 | [CA policy analysis](docs/scripts/33-ca-policy-analysis.md) | For every Conditional Access policy: what is its scope, control, exclusions, state and dependencies? And where are the gaps, overlaps and conflicts between policies? | 28 run (+ 27, 01) | 1.0.0 |
+| 34 | [Privileged register](docs/scripts/34-privileged-register.md) | Which privileged accounts and roles exist, who owns each one and why, is it vaulted, and which privilege is unmanaged? | 02/04/11/17/18/22/26/27 runs (+ attestation file) | 1.0.0 |
 
 The scripts gather facts. They do not score maturity or recommend fixes; that interpretation belongs in the analysis that uses the evidence.
 
@@ -128,6 +131,9 @@ A suggested order for a discovery pass, matched to the three common gaps and the
 | Conditional Access change: baseline, pilot, rollback | 28, 24, 29, then 28 with `-BaselineRunFolder` |
 | Access-review evidence | 20, 30 |
 | Licence confirmation for a readiness gate | 31 (with `-EvidenceRoot` after the other runs) |
+| MFA effectiveness against the agreed denominator | 27, 01, then 32 |
+| Conditional Access inventory: gaps, overlaps, conflicts | 28 (+ 27, 01), then 33 |
+| Privileged identity register (owner, purpose, vault) | 02, 04, 22, 27 (+ 11, 17, 18, 26), then 34; rerun 34 with the attestation file |
 
 1. Run `Test-ReadOnly.ps1` and share the result with whoever approves the run.
 2. Pilot each script yourself using the [pilot runbook](docs/pilot-runbook.md).
@@ -197,7 +203,7 @@ iam_scripts/
 ├── .gitignore                    blocks evidence, keys and data exports from being committed
 ├── .githooks/                    pre-commit and commit-msg guardrail hooks
 ├── .github/workflows/            guardrail CI on every push (backstop for the hooks)
-├── scripts/                      the thirty-one discovery scripts (self-contained, run independently)
+├── scripts/                      the discovery scripts (self-contained, run independently)
 ├── tools/
 │   ├── Test-ReadOnly.ps1         static proof that the scripts cannot write anything
 │   ├── Start-Discovery.ps1       launcher: readiness check, pick list, runs scripts, run summary
