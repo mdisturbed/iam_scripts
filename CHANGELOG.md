@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.14.0 - 2026-11-06
+
+### Added
+- `27-Get-IdentityPopulation.ps1` 1.1.0: `-RecipientTypesCsv` takes an Exchange Online recipient-type export (`ExternalDirectoryObjectId`, `RecipientTypeDetails`, from read-only `Get-EXORecipient`). Shared, room, equipment and scheduling mailboxes are classified `ResourceOrShared` from Exchange data instead of by name pattern, so they leave the unclassified no-HR group. New flag `ResourceSignInEnabled`: a resource mailbox whose Entra account still allows sign-in. Summary metric `Recipient types file`. Tested against a stub Graph module with `-SkipAD`.
+
 ## 1.13.0 - 2026-11-06
 
 ### Added

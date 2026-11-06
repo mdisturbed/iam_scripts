@@ -171,7 +171,7 @@ When a script is pilot-verified, hand it over with:
 | 24 CA report-only impact | 1.1.1 | | | | | Mock-tested |
 | 25 Purview classification and DLP | 1.1.0 | | | | | Mock-tested |
 | 26 PAM vault coverage | 1.1.0 | | | | | Mock-tested |
-| 27 Identity population | 1.0.1 | | | | | Mock-tested |
+| 27 Identity population | 1.1.0 | | | | | Mock-tested |
 | 28 CA policy snapshot | 1.0.1 | | | | | Mock-tested |
 | 29 Pilot outcome | 1.0.1 | | | | | Mock-tested |
 | 30 Access review evidence | 1.0.1 | | | | | Mock-tested |
