@@ -1,6 +1,6 @@
 # 27 - Identity population
 
-**Script:** [`27-Get-IdentityPopulation.ps1`](../../scripts/27-Get-IdentityPopulation.ps1) · **Version:** 1.0.1 · **Source:** AD + Entra (+ HR file, exclusions file)
+**Script:** [`27-Get-IdentityPopulation.ps1`](../../scripts/27-Get-IdentityPopulation.ps1) · **Version:** 1.1.0 · **Source:** AD + Entra (+ HR file, exclusions file)
 
 > Who exactly is in scope, how many of each kind are there, and who was excluded and why?
 
@@ -22,6 +22,7 @@ Gives you one agreed, reviewable in-scope identity population and the denominato
 | `-TestNamePatterns` | `test*`, `*-test*`, `*_test*`, `tst-*`, `tst_*` | Test account names |
 | `-ResourceNamePatterns` | `room-*`, `room_*`, `rm-*`, `conf-*`, `shared-*`, `shared_*`, `mbx-*`, `res-*`, `equip-*`, `noreply*`, `no-reply*` | Room, equipment and shared account names |
 | `-BreakGlassUpns` | (none) | UPNs (or sAMAccountNames) of the emergency access accounts |
+| `-RecipientTypesCsv` | (none) | Exchange Online recipient types (`ExternalDirectoryObjectId`, `RecipientTypeDetails`), exported read-only: `Get-EXORecipient -ResultSize Unlimited -Properties ExternalDirectoryObjectId, RecipientTypeDetails \| Select-Object ExternalDirectoryObjectId, RecipientTypeDetails \| Export-Csv …`. Shared, room, equipment and scheduling mailboxes become `ResourceOrShared` (ClassifiedBy *Exchange RecipientTypeDetails*), and flag `ResourceSignInEnabled` when sign-in is allowed |
 | `-ExclusionsCsv` | (none) | Approved exclusions ([template](../../examples/population-exclusions.example.csv)): `Identity`, `Reason`, `ApprovedBy`, `ApprovedOnUtc`, `ExpiresUtc` |
 
 Name patterns use `-like` and are tested against the sAMAccountName and the UPN prefix (the part before `@`).

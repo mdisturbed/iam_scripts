@@ -91,6 +91,11 @@
     -like patterns for resource, room and shared accounts.
 .PARAMETER BreakGlassUpns
     UPNs (or sAMAccountNames) of the emergency access accounts.
+.PARAMETER RecipientTypesCsv
+    Exchange Online recipient types (ExternalDirectoryObjectId, RecipientTypeDetails), exported read-only with
+    Get-EXORecipient. Accounts whose mailbox is SharedMailbox, RoomMailbox, EquipmentMailbox or SchedulingMailbox
+    are classified ResourceOrShared from Exchange instead of by name, and flagged ResourceSignInEnabled when the
+    Entra account is enabled (sign-in allowed).
 .PARAMETER ExclusionsCsv
     Approved exclusions (examples\population-exclusions.example.csv): Identity, Reason, ApprovedBy,
     ApprovedOnUtc, ExpiresUtc. Expired rows and rows without ApprovedBy are not applied.
@@ -103,7 +108,7 @@
     .\27-Get-IdentityPopulation.ps1 -SkipAD -HrCsvPath .\hr-export.csv -ActiveStatusValues 'Active','Leave of Absence'
 
 .NOTES
-    Version : 1.0.1
+    Version : 1.1.0
     Requires: PowerShell 5.1 or 7.x, RSAT ActiveDirectory module (not with -SkipAD),
               Microsoft.Graph.Authentication (not with -SkipEntra)
     Scopes  : User.Read.All (Directory.Read.All also works)
@@ -136,6 +141,7 @@ param(
     [string[]]$TestNamePatterns = @('test*', '*-test*', '*_test*', 'tst-*', 'tst_*'),
     [string[]]$ResourceNamePatterns = @('room-*', 'room_*', 'rm-*', 'conf-*', 'shared-*', 'shared_*', 'mbx-*', 'res-*', 'equip-*', 'noreply*', 'no-reply*'),
     [string[]]$BreakGlassUpns = @(),                        # e.g. 'bg1@contoso.com'
+    [string]$RecipientTypesCsv = '',                        # Get-EXORecipient export: ExternalDirectoryObjectId, RecipientTypeDetails
     [string]$ExclusionsCsv = '',                            # approved exclusions (examples\population-exclusions.example.csv)
 
     [ValidateSet('Delegated', 'AppCertificate')]
@@ -148,7 +154,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '27-IdentityPopulation'
-$ScriptVersion = '1.0.1'
+$ScriptVersion = '1.1.0'
 $RequiredScopes = @('User.Read.All')
 if ($SkipAD -and $SkipEntra) { throw '-SkipAD and -SkipEntra cannot both be set: at least one directory must be read.' }
 
@@ -385,6 +391,19 @@ try {
     $bgSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($b in $BreakGlassUpns) { if ("$b".Trim()) { [void]$bgSet.Add((Get-SamKey $b)) } }
 
+    # ---- 0. Exchange recipient types (optional) ----
+    $rtMap = @{}
+    $rtStatus = 'Deferred'; $rtNote = 'No recipient types file supplied (-RecipientTypesCsv)'
+    $resourceTypes = @('SharedMailbox', 'RoomMailbox', 'EquipmentMailbox', 'SchedulingMailbox')
+    if ($RecipientTypesCsv) {
+        if (-not (Test-Path -LiteralPath $RecipientTypesCsv)) { throw "Recipient types file not found: $RecipientTypesCsv" }
+        $rtRows = @(Import-Csv -LiteralPath $RecipientTypesCsv)
+        if ($rtRows.Count -and -not ($rtRows[0].PSObject.Properties.Name -contains 'ExternalDirectoryObjectId' -and $rtRows[0].PSObject.Properties.Name -contains 'RecipientTypeDetails')) { throw "Recipient types file needs ExternalDirectoryObjectId and RecipientTypeDetails columns" }
+        foreach ($x in $rtRows) { if ("$($x.ExternalDirectoryObjectId)") { $rtMap["$($x.ExternalDirectoryObjectId)".ToLowerInvariant()] = "$($x.RecipientTypeDetails)" } }
+        $rtStatus = 'Completed'; $rtNote = ('{0} ({1} recipients; SHA256 {2})' -f (Split-Path $RecipientTypesCsv -Leaf), $rtMap.Count, (Get-FileHash -LiteralPath $RecipientTypesCsv -Algorithm SHA256).Hash)
+        Write-RunLog "Recipient types: $rtNote"
+    }
+
     # ---- 1. HR input (optional) ----
     $hrById = @{}
     $hrByKey = @{}
@@ -560,6 +579,7 @@ try {
         elseif ($isGuest) { $i.Category = 'Guest'; $i.ClassifiedBy = 'Entra userType Guest' }
         elseif ($isExtMember) { $i.Category = 'ExternalMember'; $i.ClassifiedBy = 'Entra userType Member with #EXT# in UPN' }
         elseif ($rid -and $BuiltInRids.ContainsKey($rid)) { $i.Category = $BuiltInRids[$rid]; $i.ClassifiedBy = "AD built-in account (RID $rid)" }
+        elseif ($e -and $rtMap.ContainsKey("$($e.id)".ToLowerInvariant()) -and $resourceTypes -contains $rtMap["$($e.id)".ToLowerInvariant()]) { $i.Category = 'ResourceOrShared'; $i.ClassifiedBy = "Exchange RecipientTypeDetails: $($rtMap["$($e.id)".ToLowerInvariant()])" }
         elseif (($pt = Find-NamePattern $names $SyncNamePatterns)) { $i.Category = 'ServiceAccount'; $i.ClassifiedBy = "Directory sync account name: $pt" }
         elseif (($pt = Find-NamePattern $names $AdminNamePatterns)) { $i.Category = 'AdminAccount'; $i.ClassifiedBy = "AdminNamePatterns: $pt" }
         elseif (($pt = Find-NamePattern $names $ServiceNamePatterns)) { $i.Category = 'ServiceAccount'; $i.ClassifiedBy = "ServiceNamePatterns: $pt" }
@@ -628,6 +648,7 @@ try {
             if ($e -and $dupIds.ContainsKey([string]$e.id)) { $i.Flags.Add('DuplicateAnchor') }
             if ($e -and -not $ad -and $adStatus -eq 'Completed' -and "$($e.onPremisesSyncEnabled)" -eq 'True') { $i.Flags.Add('SyncedNoAdMatch') }
             if ($i.Exclusion -and $i.Category -in $nonHumanCats) { $i.Flags.Add('PatternAndExclusionConflict') }
+            if ($i.ClassifiedBy -like 'Exchange RecipientTypeDetails*' -and $i.EntraEnabled -eq $true) { $i.Flags.Add('ResourceSignInEnabled') }
         }
 
         # Excluded = enabled on a side that was read, but not counted in that side's human-workforce population
@@ -814,6 +835,7 @@ try {
     Add-Metric -Metric 'Entra users' -Value $entraStatus -Note $entraNote
     Add-Metric -Metric 'HR file' -Value $hrStatus -Note $hrNote
     Add-Metric -Metric 'Exclusions file' -Value $exStatus -Note $exNote
+    Add-Metric -Metric 'Recipient types file' -Value $rtStatus -Note $rtNote
     foreach ($d in $den) { Add-Metric -Metric "Population: $($d.Population)" -Value $(if ($d.Status -in @('Completed', 'Partial')) { $d.Count } else { $d.Status }) -Note $(if ($d.Status -ne 'Completed') { "Status $($d.Status)" } else { '' }) }
     # Counts from a source that was not read are never reported as zero.
     $noData = ($idStatus -in @('Blocked', 'EvidenceUnavailable'))
@@ -838,7 +860,7 @@ try {
     Add-Metric -Metric 'Excluded from a human-workforce population (enabled identities)' -Value $(if ($noData) { $idStatus } else { $exclRows.Count }) -Note (Join-Values @('population-exclusions.csv', $partNote))
     foreach ($t in 'Category', 'ApprovedExclusion', 'NoHrMatch', 'HrNotActive') { Add-Metric -Metric "Excluded: $t" -Value $(if ($noData) { $idStatus } else { @($exclRows | Where-Object ExclusionType -eq $t).Count }) -Note $partNote }
     if ($ExclusionsCsv) { Add-Metric -Metric 'Exclusion rows matching no identity' -Value @($exRows | Where-Object { -not $_.Matched }).Count -Note 'unmatched-exclusions.csv' }
-    foreach ($f in 'NoHrMatch', 'HrTerminatedButEnabled', 'HrActiveButDisabled', 'MultipleAccountsSameHrId', 'AdminCountNotAdminNamed', 'PersonAccountWithSpn', 'EnabledMismatch', 'DuplicateAnchor', 'SyncedNoAdMatch', 'ExclusionExpired', 'ExclusionNotApproved', 'ExclusionBadDate', 'PatternAndExclusionConflict') {
+    foreach ($f in 'ResourceSignInEnabled', 'NoHrMatch', 'HrTerminatedButEnabled', 'HrActiveButDisabled', 'MultipleAccountsSameHrId', 'AdminCountNotAdminNamed', 'PersonAccountWithSpn', 'EnabledMismatch', 'DuplicateAnchor', 'SyncedNoAdMatch', 'ExclusionExpired', 'ExclusionNotApproved', 'ExclusionBadDate', 'PatternAndExclusionConflict') {
         Add-Metric -Metric "Flag: $f" -Value $(if ($noData) { $idStatus } else { @($realIds | Where-Object { $_.Flags.Contains($f) }).Count }) -Note $partNote
     }
     Export-Dataset -Name 'summary' -Rows $summary
@@ -850,7 +872,7 @@ catch {
 finally {
     Write-RunManifest -DomainName $domainName -Context $ctx -Parameters @{ SearchBase = $SearchBase; AnchorAttribute = $AnchorAttribute; SkipAD = [bool]$SkipAD; SkipEntra = [bool]$SkipEntra
         HrCsvPath = $(if ($HrCsvPath) { Split-Path $HrCsvPath -Leaf } else { '' }); HrIdColumn = $HrIdColumn; HrStatusColumn = $HrStatusColumn; ActiveStatusValues = $ActiveStatusValues; AdEmployeeIdAttribute = $AdEmployeeIdAttribute
-        ExclusionsCsv = $(if ($ExclusionsCsv) { Split-Path $ExclusionsCsv -Leaf } else { '' }); BreakGlassCount = $BreakGlassUpns.Count
+        ExclusionsCsv = $(if ($ExclusionsCsv) { Split-Path $ExclusionsCsv -Leaf } else { '' }); RecipientTypesCsv = $(if ($RecipientTypesCsv) { Split-Path $RecipientTypesCsv -Leaf } else { '' }); BreakGlassCount = $BreakGlassUpns.Count
         AdminNamePatterns = $AdminNamePatterns; ServiceNamePatterns = $ServiceNamePatterns; TestNamePatterns = $TestNamePatterns; ResourceNamePatterns = $ResourceNamePatterns }
     Write-RunLog ("Finished. Evidence folder: {0}" -f $script:RunFolder)
 }
