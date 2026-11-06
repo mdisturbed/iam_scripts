@@ -45,7 +45,7 @@
     .\01-Get-MfaCoverage.ps1 -AuthMode AppCertificate -TenantId tenant-id-redacted -ClientId <app-id> -CertificateThumbprint <thumbprint>
 
 .NOTES
-    Version : 1.1.2
+    Version : 1.2.0
     Requires: PowerShell 5.1 or 7.x, module Microsoft.Graph.Authentication (only)
     Scopes  : Policy.Read.All, Directory.Read.All, AuditLog.Read.All, UserAuthenticationMethod.Read.All,
               RoleManagement.Read.Directory, PrivilegedEligibilitySchedule.Read.AzureADGroup (not with -SkipPrivilegeJoin)
@@ -69,6 +69,7 @@ param(
     [int]$SignInSliceHours = 24,
     [switch]$SkipSignIns,
     [switch]$SkipExcludedGroupMembers,
+    [switch]$SkipIncludedScopeMembers,
     [switch]$SkipPrivilegeJoin,
     [switch]$IncludeNonInteractive
     # -------------------------------------------------------------------------
@@ -76,7 +77,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '01-MfaCoverage'
-$ScriptVersion = '1.1.2'
+$ScriptVersion = '1.2.0'
 $RequiredScopes = @('Policy.Read.All', 'Directory.Read.All', 'AuditLog.Read.All', 'UserAuthenticationMethod.Read.All')
 if (-not $SkipPrivilegeJoin) { $RequiredScopes += @('RoleManagement.Read.Directory', 'PrivilegedEligibilitySchedule.Read.AzureADGroup') }
 
@@ -744,6 +745,7 @@ try {
     $exclusionRows = [System.Collections.Generic.List[object]]::new()
     $excludedGroups = @{}   # groupId -> list of policy names
     $excludedRoles = [System.Collections.Generic.List[object]]::new()
+    $includedScope = [System.Collections.Generic.List[object]]::new()   # users, groups and roles that MFA policies target
     try {
         $policies = Invoke-GraphGetAll -Uri 'https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies' -Label 'caPolicies'
         $caRead = $true
@@ -825,6 +827,11 @@ try {
             if ($u.PSObject.Properties.Name -contains 'excludeGuestsOrExternalUsers' -and $u.excludeGuestsOrExternalUsers) {
                 $exclusionRows.Add([pscustomobject][ordered]@{ PolicyName = $p.displayName; PolicyState = $p.state; RequiresMfa = $requiresMfa; ExclusionType = 'GuestOrExternal'; ObjectId = ''; DisplayName = $u.excludeGuestsOrExternalUsers.guestOrExternalUserTypes })
             }
+            if ($requiresMfa -and "$($p.state)" -ne 'disabled') {
+                foreach ($id in @($u.includeUsers)) { if ($id -and $id -notin @('All', 'None', 'GuestsOrExternalUsers')) { $includedScope.Add([pscustomobject]@{ PolicyName = $p.displayName; PolicyState = $p.state; Type = 'User'; Id = $id; Name = Resolve-DirectoryObject $id }) } }
+                foreach ($id in @($u.includeGroups)) { if ($id) { $includedScope.Add([pscustomobject]@{ PolicyName = $p.displayName; PolicyState = $p.state; Type = 'Group'; Id = $id; Name = Resolve-DirectoryObject $id }) } }
+                foreach ($id in @($u.includeRoles)) { if ($id) { $includedScope.Add([pscustomobject]@{ PolicyName = $p.displayName; PolicyState = $p.state; Type = 'Role'; Id = $id; Name = $(if ($roleNames[$id]) { $roleNames[$id] } else { $id }) }) } }
+            }
         }
         Export-Dataset -Name 'ca-policies' -Rows $policyRows
         Export-Dataset -Name 'ca-exclusions' -Rows $exclusionRows
@@ -900,6 +907,48 @@ try {
         }
         $complete = Test-PrivSetComplete $privSet
         Export-Dataset -Name 'ca-excluded-role-holders' -Rows $roleHolderRows -Status $(if ($complete) { 'Completed' } else { 'Partial' }) -Note $(if ($excludedRoles.Count -eq 0) { 'No roles are excluded from any CA policy' } elseif ($complete) { '' } else { "Privileged set incomplete: $(Get-PrivSetStatusText $privSet)" })
+    }
+
+    # ---- 2c. Accounts in the scope of MFA policies that target users, groups or roles (not All users) ----
+    # Lets later analysis (script 32) tell who an app- or group-scoped MFA policy actually covers.
+    if ($SkipIncludedScopeMembers) { Set-DatasetStatus -Name 'ca-included-scope-members' -Status 'Deferred' -Note '-SkipIncludedScopeMembers' }
+    elseif (-not $caRead) { Set-DatasetStatus -Name 'ca-included-scope-members' -Status $caError -Note 'Depends on ca-policies, which could not be read' }
+    else {
+        $scopeRows = [System.Collections.Generic.List[object]]::new()
+        $scopeFailed = [System.Collections.Generic.List[string]]::new()
+        $groupCache = @{}
+        foreach ($s in $includedScope) {
+            switch ($s.Type) {
+                'User' {
+                    $scopeRows.Add([pscustomobject][ordered]@{ PolicyName = $s.PolicyName; PolicyState = $s.PolicyState; IncludedVia = 'User'; ScopeId = $s.Id; ScopeName = $s.Name; MemberId = $s.Id; MemberType = 'user'; MemberDisplayName = $s.Name; MemberUPN = ($s.Name -replace '\s*\(user\)$', ''); AccountEnabled = ''; EffectiveForCa = $true })
+                }
+                'Group' {
+                    if (-not $groupCache.ContainsKey($s.Id)) {
+                        try { $groupCache[$s.Id] = @(Invoke-GraphGetAll -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/transitiveMembers?`$select=id,displayName,userPrincipalName,accountEnabled" -f $s.Id) -Label "transitiveMembers $($s.Id)") }
+                        catch {
+                            $groupCache[$s.Id] = $null
+                            $scopeFailed.Add(('{0} (HTTP {1})' -f $s.Name, (Get-HttpStatusFromError $_)))
+                            Write-RunLog ("Members of included group {0} not readable: {1}" -f $s.Name, $_.Exception.Message) 'WARN'
+                        }
+                    }
+                    foreach ($m in @($groupCache[$s.Id] | Where-Object { $_ })) {
+                        $scopeRows.Add([pscustomobject][ordered]@{ PolicyName = $s.PolicyName; PolicyState = $s.PolicyState; IncludedVia = 'Group'; ScopeId = $s.Id; ScopeName = $s.Name; MemberId = $m.id
+                                MemberType = ($m.'@odata.type' -replace '#microsoft.graph.', ''); MemberDisplayName = $m.displayName
+                                MemberUPN = $(if ($m.PSObject.Properties.Name -contains 'userPrincipalName') { $m.userPrincipalName } else { '' })
+                                AccountEnabled = $(if ($m.PSObject.Properties.Name -contains 'accountEnabled') { $m.accountEnabled } else { '' }); EffectiveForCa = $true })
+                    }
+                }
+                'Role' {
+                    if (-not $privSet) { if (-not $scopeFailed.Contains("roles: privileged set not readable")) { $scopeFailed.Add('roles: privileged set not readable') }; continue }
+                    foreach ($h in @($privSet.Rows | Where-Object { $_.Role -eq $s.Name -and $_.PrincipalType -ne 'group' })) {
+                        $scopeRows.Add([pscustomobject][ordered]@{ PolicyName = $s.PolicyName; PolicyState = $s.PolicyState; IncludedVia = 'Role'; ScopeId = $s.Id; ScopeName = $s.Name; MemberId = $h.PrincipalId; MemberType = $h.PrincipalType
+                                MemberDisplayName = $h.PrincipalName; MemberUPN = $h.Upn; AccountEnabled = $h.AccountEnabled; EffectiveForCa = Test-RowEffectiveForCa $h })
+                    }
+                }
+            }
+        }
+        $note = $(if (-not $includedScope.Count) { 'No MFA policy targets specific users, groups or roles' } elseif ($scopeFailed.Count) { 'Members NOT readable for: ' + (Join-Values $scopeFailed) } else { 'Members of users, groups and roles included by enabled and report-only MFA policies' })
+        Export-Dataset -Name 'ca-included-scope-members' -Rows $scopeRows -Status $(if ($scopeFailed.Count) { 'Partial' } else { 'Completed' }) -Note $note
     }
 
     # ---- 3. MFA registration details ----
@@ -1139,6 +1188,6 @@ catch {
     throw
 }
 finally {
-    Write-RunManifest -Context $ctx -Parameters @{ SignInLookbackDays = $SignInLookbackDays; MaxSignInRecords = $MaxSignInRecords; SignInSliceHours = $SignInSliceHours; SkipSignIns = [bool]$SkipSignIns; SkipExcludedGroupMembers = [bool]$SkipExcludedGroupMembers; SkipPrivilegeJoin = [bool]$SkipPrivilegeJoin; IncludeNonInteractive = [bool]$IncludeNonInteractive }
+    Write-RunManifest -Context $ctx -Parameters @{ SignInLookbackDays = $SignInLookbackDays; MaxSignInRecords = $MaxSignInRecords; SignInSliceHours = $SignInSliceHours; SkipSignIns = [bool]$SkipSignIns; SkipExcludedGroupMembers = [bool]$SkipExcludedGroupMembers; SkipIncludedScopeMembers = [bool]$SkipIncludedScopeMembers; SkipPrivilegeJoin = [bool]$SkipPrivilegeJoin; IncludeNonInteractive = [bool]$IncludeNonInteractive }
     Write-RunLog ("Finished. Evidence folder: {0}" -f $script:RunFolder)
 }

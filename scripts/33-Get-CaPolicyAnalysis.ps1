@@ -74,7 +74,7 @@
     .\33-Get-CaPolicyAnalysis.ps1 -OutputRoot D:\Evidence -BreakGlassUpns bg1@contoso.com, bg2@contoso.com
 
 .NOTES
-    Version : 1.0.1
+    Version : 1.1.0
     Requires: PowerShell 5.1 or 7.x. An earlier run of 28 in the evidence folder (27 and 01 optional).
 #>
 [CmdletBinding()]
@@ -86,6 +86,7 @@ param(
     [string]$PopulationRunFolder = '',
     [string]$MfaRunFolder = '',
     [string[]]$BreakGlassUpns = @(),
+    [switch]$NoBreakGlassAccounts,
     [int]$ReportOnlyMaxDays = 30,
     [int]$DisabledMaxDays = 90,
     [int]$BroadExclusionThreshold = 25,
@@ -95,7 +96,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '33-CaPolicyAnalysis'
-$ScriptVersion = '1.0.1'
+$ScriptVersion = '1.1.0'
 $Server        = ''
 
 #region ---- Common helpers (identical in every non-directory script (AWS, event logs); self-contained by design) ----
@@ -650,11 +651,12 @@ try {
         }
     }
     $bgKnown = ($bgIds.Count -or $bgUpns.Count)
+    if ($NoBreakGlassAccounts -and -not $bgKnown) { Add-Issue 'Gap' 'High' 'NoBreakGlassAccounts' @() 'No emergency access (break-glass) accounts exist (stated with -NoBreakGlassAccounts)' 'Create at least two cloud-only emergency access accounts with phishing-resistant credentials, exclude them from every policy (directly or through one dedicated group), and alert on their sign-ins' 'Microsoft emergency access guidance; Maester MT.1005' }
     $bgFail = @($bgCheck | Where-Object { $_.State -eq 'NotExcluded' })
     $checks.Add([pscustomobject][ordered]@{ Check = 'Break-glass accounts excluded from every enabled policy'; Reference = 'Maester MT.1005'
-            Result = $(if (-not $bgKnown) { 'NotAssessed' } elseif ($bgFail.Count) { 'Gap' } elseif (@($bgCheck | Where-Object { $_.State -like 'Unverified*' }).Count) { 'Partial' } else { 'Pass' })
+            Result = $(if (-not $bgKnown -and $NoBreakGlassAccounts) { 'Gap' } elseif (-not $bgKnown) { 'NotAssessed' } elseif ($bgFail.Count) { 'Gap' } elseif (@($bgCheck | Where-Object { $_.State -like 'Unverified*' }).Count) { 'Partial' } else { 'Pass' })
             SatisfiedBy = ''; ReportOnlyCandidates = ''
-            Note = $(if (-not $bgKnown) { 'No break-glass accounts known: run 27 with -BreakGlassUpns, or pass -BreakGlassUpns here' } else { ('{0} policy checks, {1} not excluded, {2} unverified' -f $bgCheck.Count, $bgFail.Count, @($bgCheck | Where-Object { $_.State -like 'Unverified*' }).Count) + $(if ($bgUnreferenced.Count) { '; not referenced by any policy: ' + ($bgUnreferenced -join ', ') } else { '' }) }) })
+            Note = $(if (-not $bgKnown -and $NoBreakGlassAccounts) { 'No break-glass accounts exist (-NoBreakGlassAccounts)' } elseif (-not $bgKnown) { 'No break-glass accounts known: run 27 with -BreakGlassUpns, or pass -BreakGlassUpns here; -NoBreakGlassAccounts if none exist' } else { ('{0} policy checks, {1} not excluded, {2} unverified' -f $bgCheck.Count, $bgFail.Count, @($bgCheck | Where-Object { $_.State -like 'Unverified*' }).Count) + $(if ($bgUnreferenced.Count) { '; not referenced by any policy: ' + ($bgUnreferenced -join ', ') } else { '' }) }) })
 
     # 3c. Exclusions without a fallback policy (enabled MFA or block policies). A fallback must be of the same kind,
     # include the excluded object without excluding it, and apply to every sign-in the excluding policy applies to.
@@ -792,7 +794,7 @@ try {
     Add-Metric 'Issues: High severity' @($issues | Where-Object Severity -eq 'High').Count
     Add-Metric 'Coverage checks passed' @($checks | Where-Object Result -eq 'Pass').Count ('of {0}; gaps: {1}' -f $checks.Count, (Join-Values ($checks | Where-Object { $_.Result -in @('Gap', 'ReportOnlyOnly') } | ForEach-Object { $_.Check })))
     Add-Metric 'Deleted references' @($deps | Where-Object { $_.Resolved -eq $false }).Count
-    Add-Metric 'Break-glass accounts checked' $(if ($bgKnown) { $bgAccounts.Count } else { '' }) $(if ($bgKnown) { '' } else { 'Not assessed' })
+    Add-Metric 'Break-glass accounts checked' $(if ($bgKnown) { $bgAccounts.Count } else { '' }) $(if ($bgKnown) { '' } elseif ($NoBreakGlassAccounts) { 'None exist (gap)' } else { 'Not assessed' })
     Export-Dataset -Name 'summary' -Rows $summary
 }
 catch {
@@ -800,6 +802,6 @@ catch {
     throw
 }
 finally {
-    Write-RunManifest -DomainName '' -Parameters @{ EvidenceRoot = $EvidenceRoot; SnapshotRunFolder = $SnapshotRunFolder; PopulationRunFolder = $PopulationRunFolder; MfaRunFolder = $MfaRunFolder; BreakGlassUpns = @($BreakGlassUpns).Count; ReportOnlyMaxDays = $ReportOnlyMaxDays; DisabledMaxDays = $DisabledMaxDays; BroadExclusionThreshold = $BroadExclusionThreshold; AllowHashMismatch = [bool]$AllowHashMismatch }
+    Write-RunManifest -DomainName '' -Parameters @{ EvidenceRoot = $EvidenceRoot; SnapshotRunFolder = $SnapshotRunFolder; PopulationRunFolder = $PopulationRunFolder; MfaRunFolder = $MfaRunFolder; BreakGlassUpns = @($BreakGlassUpns).Count; NoBreakGlassAccounts = [bool]$NoBreakGlassAccounts; ReportOnlyMaxDays = $ReportOnlyMaxDays; DisabledMaxDays = $DisabledMaxDays; BroadExclusionThreshold = $BroadExclusionThreshold; AllowHashMismatch = [bool]$AllowHashMismatch }
     Write-RunLog ("Finished. Evidence folder: {0}" -f $script:RunFolder)
 }

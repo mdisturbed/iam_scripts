@@ -1,6 +1,6 @@
 # 01 - MFA coverage
 
-**Script:** [`01-Get-MfaCoverage.ps1`](../../scripts/01-Get-MfaCoverage.ps1) · **Version:** 1.1.2 · **Source:** Entra
+**Script:** [`01-Get-MfaCoverage.ps1`](../../scripts/01-Get-MfaCoverage.ps1) · **Version:** 1.2.0 · **Source:** Entra
 
 > Is MFA actually enforced everywhere, how strong is it, and who is left out?
 
@@ -20,6 +20,7 @@ Measures whether MFA is actually enforced, not just registered, how strong the r
 | `-SignInSliceHours` | `24` | Hours of sign-ins read per Graph query (1-168). Use a smaller slice if a large tenant still times out |
 | `-SkipSignIns` | off | Skip the interactive sign-in query |
 | `-SkipExcludedGroupMembers` | off | Skip expanding excluded groups |
+| `-SkipIncludedScopeMembers` | off | Skip expanding the users, groups and roles that MFA policies target (used by script 32) |
 | `-SkipPrivilegeJoin` | off | Skip building the privileged set (no `IsPrivileged` / `IsTier0`, no excluded role holders) |
 | `-IncludeNonInteractive` | off | Also read non-interactive single-factor sign-ins (beta endpoint; high volume, keep the lookback short) |
 
@@ -37,6 +38,7 @@ Each run folder also has `summary.csv`, `dataset-status.csv`, `run-manifest.json
 | `ca-exclusions.csv` | Exclusion on a policy | `PolicyName`, `ExclusionType` (User/Group/Role/GuestOrExternal), `DisplayName` |
 | `ca-excluded-group-members.csv` | Member of an excluded group (transitive) | `GroupName`, `ExcludedFromPolicies`, `MemberUPN`, `AccountEnabled` |
 | `ca-excluded-role-holders.csv` | Holder of a role excluded from a policy | `PolicyName`, `RoleName`, `Upn`, `AssignmentState`, `Via`, `ViaGroup`, `EffectiveForCa` |
+| `ca-included-scope-members.csv` | Account in the scope of an enabled or report-only MFA policy that targets users, groups or roles | `PolicyName`, `PolicyState`, `IncludedVia` (User / Group / Role), `ScopeId`, `ScopeName`, `MemberId`, `MemberType`, `MemberDisplayName`, `MemberUPN`, `AccountEnabled`, `EffectiveForCa` |
 | `mfa-registration.csv` | User | `IsMfaRegistered`, `IsMfaCapable`, `MethodsRegistered`, `HasSmsOrVoice`, `HasPhoneMethodOnly`, `IsAdmin`, `PhishResistant`, `MethodStrength`, `IsPrivileged`, `IsTier0`, `AccountEnabled`, `OnPremisesSynced` |
 | `auth-methods-policy.csv` | Method configuration, campaign, migration state, security defaults | `Section`, `Id`, `State`, `IncludeTargets`, `ExcludeTargets`, `Flags` |
 | `signins-singlefactor-success.csv` | User + app + client | `IsLegacyAuth`, `SignInCount`, first/last seen, `CaStatuses` |

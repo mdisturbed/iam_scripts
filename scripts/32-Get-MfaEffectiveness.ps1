@@ -75,7 +75,7 @@
     .\32-Get-MfaEffectiveness.ps1 -OutputRoot D:\Evidence -MfaPolicyNames 'Require MFA - all users', 'Require MFA - guests'
 
 .NOTES
-    Version : 1.0.1
+    Version : 1.1.0
     Requires: PowerShell 5.1 or 7.x. Earlier runs of 01 and (for an agreed denominator) 27 in the evidence folder.
 #>
 [CmdletBinding()]
@@ -94,7 +94,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '32-MfaEffectiveness'
-$ScriptVersion = '1.0.1'
+$ScriptVersion = '1.1.0'
 $Server        = ''
 
 #region ---- Common helpers (identical in every non-directory script (AWS, event logs); self-contained by design) ----
@@ -292,6 +292,8 @@ function Get-BaselineCondition {
     if ($P.ExcludeLocations) { $c += 'excluded locations: ' + $(if ($P.ExcludeLocationNames) { $P.ExcludeLocationNames } else { $P.ExcludeLocations }) }
     if ($P.ExcludeApplications) { $c += "excluded apps: $($P.ExcludeApplications)" }
     if ($P.DeviceFilter) { $c += "device filter: $($P.DeviceFilter)" }
+    if ($P.IncludeApplications -and (Split-List $P.IncludeApplications) -notcontains 'All') { $c += "only apps: $($P.IncludeApplications)" }
+    if ($P.UserActions) { $c += "only user actions: $($P.UserActions)" }
     return ($c -join '; ')
 }
 
@@ -332,6 +334,7 @@ try {
     $role  = Read-SourceDataset -Script '01' -RunFolder $run01 -Dataset 'ca-excluded-role-holders'
     $sf    = Read-SourceDataset -Script '01' -RunFolder $run01 -Dataset 'signins-singlefactor-success'
     $ni    = Read-SourceDataset -Script '01' -RunFolder $run01 -Dataset 'signins-noninteractive-singlefactor' -Optional
+    $scope = Read-SourceDataset -Script '01' -RunFolder $run01 -Dataset 'ca-included-scope-members' -Optional
     $popId = Read-SourceDataset -Script '27' -RunFolder $run27 -Dataset 'identity-population'
     $popDn = Read-SourceDataset -Script '27' -RunFolder $run27 -Dataset 'population-denominators'
     $popEx = Read-SourceDataset -Script '27' -RunFolder $run27 -Dataset 'population-exclusions' -Optional
@@ -402,6 +405,14 @@ try {
         if (-not $exclByUser.ContainsKey($UserId)) { $exclByUser[$UserId] = [System.Collections.Generic.List[object]]::new() }
         $exclByUser[$UserId].Add([pscustomobject]@{ Policy = $Policy; Via = $Via; ViaName = $ViaName }) }
     $baselineNames = @($baseline | ForEach-Object { $_.PolicyName })
+    # Who each enabled baseline policy targets when it names users, groups or roles (01 1.2.0 and later)
+    $scopeByPolicy = @{}
+    if ($scope.Ok) {
+        foreach ($s in @($scope.Rows | Where-Object { "$($_.PolicyState)" -eq 'enabled' -and $baselineNames -contains $_.PolicyName -and (Test-True $_.EffectiveForCa) })) {
+            if (-not $scopeByPolicy.ContainsKey($s.PolicyName)) { $scopeByPolicy[$s.PolicyName] = @{} }
+            if ($s.MemberId) { $scopeByPolicy[$s.PolicyName]["$($s.MemberId)"] = "$($s.IncludedVia): $($s.ScopeName)" }
+        }
+    }
     $guestExcludedFrom = @()
     $exclusionGaps = [System.Collections.Generic.List[string]]::new()
     if ($exc.Ok) {
@@ -499,9 +510,12 @@ try {
         }
         # A baseline policy covers this identity when it targets All users, or names the user directly; group or role targeting can't be resolved offline.
         $label = "$upn (user)"
-        $applies = @($baseline | Where-Object { (Split-List $_.IncludeUsers) -contains 'All' -or ($upn -and (Split-List $_.IncludeUsers) -contains $label) })
+        $applies = @($baseline | Where-Object {
+                (Split-List $_.IncludeUsers) -contains 'All' -or ($upn -and (Split-List $_.IncludeUsers) -contains $label) -or
+                ($uid -and $scopeByPolicy.ContainsKey($_.PolicyName) -and $scopeByPolicy[$_.PolicyName].ContainsKey("$uid")) })
         $covering = @($applies | Where-Object { $excludedFrom -notcontains $_.PolicyName })
-        $maybe = @($baseline | Where-Object { $applies -notcontains $_ -and ($_.IncludeGroups -or $_.IncludeRoles) -and $excludedFrom -notcontains $_.PolicyName })
+        # Group or role targeting can only be resolved with 01's ca-included-scope-members; without it, Unknown.
+        $maybe = @($baseline | Where-Object { $applies -notcontains $_ -and ($_.IncludeGroups -or $_.IncludeRoles) -and -not $scope.Ok -and $excludedFrom -notcontains $_.PolicyName })
         $enforcement = $(if (-not $pol.Ok) { 'Unknown' }
             elseif (-not $baseline.Count) { 'NotCovered' }
             elseif (@($covering | Where-Object { -not (Get-BaselineCondition $_) }).Count) { 'Enforced' }
