@@ -75,7 +75,7 @@
     .\32-Get-MfaEffectiveness.ps1 -OutputRoot D:\Evidence -MfaPolicyNames 'Require MFA - all users', 'Require MFA - guests'
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x. Earlier runs of 01 and (for an agreed denominator) 27 in the evidence folder.
 #>
 [CmdletBinding()]
@@ -94,7 +94,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '32-MfaEffectiveness'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $Server        = ''
 
 #region ---- Common helpers (identical in every non-directory script (AWS, event logs); self-contained by design) ----
@@ -285,7 +285,7 @@ function Get-BaselineVerdict {
     return 'Baseline'
 }
 
-function Get-BaselineConditions {
+function Get-BaselineCondition {
     # What a baseline policy still leaves out (makes enforcement conditional).
     param($P)
     $c = @()
@@ -384,7 +384,7 @@ try {
             if (-not (Test-True $p.RequiresMfa) -and $verdict -ne 'Baseline') { continue }
             $policyRows.Add([pscustomobject][ordered]@{
                     PolicyName = $p.PolicyName; State = $p.State; CountsAsBaseline = ($verdict -eq 'Baseline'); Reason = $(if ($verdict -eq 'Baseline') { $(if ($MfaPolicyNames.Count) { 'Named in -MfaPolicyNames' } else { 'Enabled, MFA, all users, all apps, all clients' }) } else { $verdict })
-                    LeavesOut = $(if ($verdict -eq 'Baseline') { Get-BaselineConditions $p } else { '' })
+                    LeavesOut = $(if ($verdict -eq 'Baseline') { Get-BaselineCondition $p } else { '' })
                     IncludeUsers = $p.IncludeUsers; IncludeGroups = $p.IncludeGroups; IncludeRoles = $p.IncludeRoles; ExcludeUsers = $p.ExcludeUsers; ExcludeGroups = $p.ExcludeGroups; ExcludeRoles = $p.ExcludeRoles
                     IncludeApplications = $p.IncludeApplications; ExcludeApplications = $p.ExcludeApplications; GrantControls = $p.GrantControls; AuthStrength = $p.AuthStrength
                 })
@@ -445,7 +445,7 @@ try {
         $key = $(if ($Identity.UserId) { $Identity.UserId } else { "upn:$($Identity.Upn)".ToLowerInvariant() })
         if (-not $members.Contains($key)) { $members[$key] = $Identity; $Identity | Add-Member -NotePropertyName Populations -NotePropertyValue ([System.Collections.Generic.List[string]]::new()) }
         if (-not $members[$key].Populations.Contains($Population)) { $members[$key].Populations.Add($Population) } }
-    function New-Identity { param([string]$UserId, [string]$Upn, [string]$DisplayName, [string]$Category, [string]$HrId = '')
+    function ConvertTo-IdentityRecord { param([string]$UserId, [string]$Upn, [string]$DisplayName, [string]$Category, [string]$HrId = '')
         [pscustomobject]@{ UserId = $UserId; Upn = $Upn; DisplayName = $DisplayName; Category = $Category; HrId = $HrId } }
 
     $popNames = [ordered]@{}
@@ -457,7 +457,7 @@ try {
         foreach ($i in $popId.Rows) {
             $id = "$($i.EntraObjectId)"
             if (-not $id -and -not $i.Upn) { continue }
-            $o = New-Identity -UserId $id -Upn $i.Upn -DisplayName $i.DisplayName -Category $i.Category -HrId $i.HrId
+            $o = ConvertTo-IdentityRecord -UserId $id -Upn $i.Upn -DisplayName $i.DisplayName -Category $i.Category -HrId $i.HrId
             if (Test-True $i.InHumanWorkforceEntra) { Add-PopulationMember 'Human workforce enabled (Entra)' $o }
             if (-not (Test-True $i.EntraEnabled)) { continue }
             if ($i.Category -eq 'AdminAccount') { Add-PopulationMember 'Admin accounts enabled (Entra)' $o }
@@ -470,14 +470,14 @@ try {
         $popNames['Guests enabled'] = 'Every enabled guest in the MFA registration report'
         foreach ($r in $reg.Rows) {
             if ("$($r.AccountEnabled)" -eq 'False') { continue }
-            $o = New-Identity -UserId $r.UserId -Upn $r.UserPrincipalName -DisplayName '' -Category ''
+            $o = ConvertTo-IdentityRecord -UserId $r.UserId -Upn $r.UserPrincipalName -DisplayName '' -Category ''
             if ("$($r.UserType)" -eq 'guest' -or "$($r.UserType)" -eq 'Guest') { Add-PopulationMember 'Guests enabled' $o } else { Add-PopulationMember 'Enabled member accounts (fallback, not agreed)' $o }
         }
     }
     $popNames['Privileged accounts enabled (Entra roles)'] = 'Enabled accounts holding any Entra directory role (active, eligible or through a group) per script 01 IsPrivileged'
     $privKnown = @($reg.Rows | Where-Object { "$($_.IsPrivileged)" -ne '' }).Count -gt 0
     foreach ($r in @($reg.Rows | Where-Object { (Test-True $_.IsPrivileged) -and "$($_.AccountEnabled)" -ne 'False' })) {
-        $o = New-Identity -UserId $r.UserId -Upn $r.UserPrincipalName -DisplayName '' -Category ''
+        $o = ConvertTo-IdentityRecord -UserId $r.UserId -Upn $r.UserPrincipalName -DisplayName '' -Category ''
         Add-PopulationMember 'Privileged accounts enabled (Entra roles)' $o
     }
 
@@ -504,7 +504,7 @@ try {
         $maybe = @($baseline | Where-Object { $applies -notcontains $_ -and ($_.IncludeGroups -or $_.IncludeRoles) -and $excludedFrom -notcontains $_.PolicyName })
         $enforcement = $(if (-not $pol.Ok) { 'Unknown' }
             elseif (-not $baseline.Count) { 'NotCovered' }
-            elseif (@($covering | Where-Object { -not (Get-BaselineConditions $_) }).Count) { 'Enforced' }
+            elseif (@($covering | Where-Object { -not (Get-BaselineCondition $_) }).Count) { 'Enforced' }
             elseif ($covering.Count) { 'EnforcedWithConditions' }
             elseif ($maybe.Count) { 'Unknown' }
             elseif ($excludedFrom.Count) { 'Excluded' }

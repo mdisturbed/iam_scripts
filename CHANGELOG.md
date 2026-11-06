@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.12.1 - 2026-11-06
+
+### Changed
+- `32-Get-MfaEffectiveness.ps1` 1.0.1: internal functions renamed to clear PSScriptAnalyzer warnings (`New-Identity` to `ConvertTo-IdentityRecord`, `Get-BaselineConditions` to `Get-BaselineCondition`). No change to output. PSScriptAnalyzer run on 32 and 34: the only remaining warnings are in the shared helper block (`Set-DatasetStatus`, `Join-Values`), as in every script.
+
 ## 1.12.0 - 2026-11-06
 
 Three offline analysis scripts. Each reads earlier run folders only, checks every source file's SHA-256 against the hash its run recorded (a file edited after its run is Blocked, not used), and lists every source in `source-runs.csv`. They need no sign-in and no new access.

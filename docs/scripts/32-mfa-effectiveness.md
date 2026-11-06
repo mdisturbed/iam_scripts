@@ -1,6 +1,6 @@
 # 32 - MFA effectiveness
 
-**Script:** [`32-Get-MfaEffectiveness.ps1`](../../scripts/32-Get-MfaEffectiveness.ps1) · **Version:** 1.0.0 · **Source:** earlier runs of 01 and 27 (+ exception register)
+**Script:** [`32-Get-MfaEffectiveness.ps1`](../../scripts/32-Get-MfaEffectiveness.ps1) · **Version:** 1.0.1 · **Source:** earlier runs of 01 and 27 (+ exception register)
 
 > Out of the agreed population, how many identities are actually protected by MFA, who is excluded and why, where did MFA fail in practice, and which evidence does each number come from?
 
