@@ -1,6 +1,6 @@
 # 33 - CA policy analysis
 
-**Script:** [`33-Get-CaPolicyAnalysis.ps1`](../../scripts/33-Get-CaPolicyAnalysis.ps1) · **Version:** 1.0.0 · **Source:** a script 28 snapshot (+ 27, 01)
+**Script:** [`33-Get-CaPolicyAnalysis.ps1`](../../scripts/33-Get-CaPolicyAnalysis.ps1) · **Version:** 1.0.1 · **Source:** a script 28 snapshot (+ 27, 01)
 
 > For every Conditional Access policy: what is its scope, control, exclusions, state and dependencies? And where are the gaps, overlaps and conflicts between policies?
 

@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.12.2 - 2026-11-06
+
+### Changed
+- `33-Get-CaPolicyAnalysis.ps1` 1.0.1: internal functions renamed to clear PSScriptAnalyzer `PSUseSingularNouns` (`Test-Covers` to `Test-PolicyCoverage`, `Test-AllUsersAllApps` to `Test-AllUserAllAppScope`, `Add-Names` to `Add-NameMapping`). No change to output. PSScriptAnalyzer is now clean on 32 to 34 apart from the shared helper block.
+
 ## 1.12.1 - 2026-11-06
 
 ### Changed

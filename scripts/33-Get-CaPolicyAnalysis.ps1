@@ -74,7 +74,7 @@
     .\33-Get-CaPolicyAnalysis.ps1 -OutputRoot D:\Evidence -BreakGlassUpns bg1@contoso.com, bg2@contoso.com
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x. An earlier run of 28 in the evidence folder (27 and 01 optional).
 #>
 [CmdletBinding()]
@@ -95,7 +95,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '33-CaPolicyAnalysis'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $Server        = ''
 
 #region ---- Common helpers (identical in every non-directory script (AWS, event logs); self-contained by design) ----
@@ -368,13 +368,13 @@ function Test-ConditionsCover {
     return $true
 }
 
-function Test-Covers {
+function Test-PolicyCoverage {
     # True when policy A applies to every sign-in policy B applies to (exact comparison, no simulation).
     param($A, $B)
     return ((Test-UsersCover $A $B) -and (Test-ConditionsCover $A $B))
 }
 
-function Test-AllUsersAllApps {
+function Test-AllUserAllAppScope {
     # Enabled-style baseline shape: all users, all apps, every client, no include-narrowing condition.
     param($P)
     if ($P.IncUsers -notcontains 'All' -or $P.IncApps -notcontains 'All' -or $P.UserActions.Count -or $P.AuthCtx.Count) { return $false }
@@ -413,7 +413,7 @@ try {
     $names = @{}
     $csvById = @{}
     if ($pc.Ok) { foreach ($r in $pc.Rows) { $csvById["$($r.PolicyId)"] = $r } }
-    function Add-Names { param($Ids, [string]$Text)
+    function Add-NameMapping { param($Ids, [string]$Text)
         $ids = Get-List $Ids; $labels = @(Split-List $Text)
         if ($ids.Count -and $ids.Count -eq $labels.Count) { for ($i = 0; $i -lt $ids.Count; $i++) { if (-not $names.ContainsKey($ids[$i])) { $names[$ids[$i]] = $labels[$i] } } } }
     $locById = @{}
@@ -440,10 +440,10 @@ try {
         $g = Get-OptionalValue $p 'grantControls'; $s = Get-OptionalValue $p 'sessionControls'
         $csv = $(if ($csvById.ContainsKey("$($p.id)")) { $csvById["$($p.id)"] } else { $null })
         if ($csv) {
-            Add-Names (Get-OptionalValue $u 'includeUsers') $csv.IncludeUsers; Add-Names (Get-OptionalValue $u 'excludeUsers') $csv.ExcludeUsers
-            Add-Names (Get-OptionalValue $u 'includeGroups') $csv.IncludeGroups; Add-Names (Get-OptionalValue $u 'excludeGroups') $csv.ExcludeGroups
-            Add-Names (Get-OptionalValue $u 'includeRoles') $csv.IncludeRoles; Add-Names (Get-OptionalValue $u 'excludeRoles') $csv.ExcludeRoles
-            Add-Names (Get-OptionalValue $a 'includeApplications') $csv.IncludeApplications; Add-Names (Get-OptionalValue $a 'excludeApplications') $csv.ExcludeApplications
+            Add-NameMapping (Get-OptionalValue $u 'includeUsers') $csv.IncludeUsers; Add-NameMapping (Get-OptionalValue $u 'excludeUsers') $csv.ExcludeUsers
+            Add-NameMapping (Get-OptionalValue $u 'includeGroups') $csv.IncludeGroups; Add-NameMapping (Get-OptionalValue $u 'excludeGroups') $csv.ExcludeGroups
+            Add-NameMapping (Get-OptionalValue $u 'includeRoles') $csv.IncludeRoles; Add-NameMapping (Get-OptionalValue $u 'excludeRoles') $csv.ExcludeRoles
+            Add-NameMapping (Get-OptionalValue $a 'includeApplications') $csv.IncludeApplications; Add-NameMapping (Get-OptionalValue $a 'excludeApplications') $csv.ExcludeApplications
         }
         $df = Get-OptionalValue $dv 'deviceFilter'
         $str = Get-OptionalValue $g 'authenticationStrength'
@@ -537,7 +537,7 @@ try {
         $checks.Add([pscustomobject][ordered]@{ Check = $Check; Reference = $Reference; Result = $result; SatisfiedBy = Join-Values ($sat | ForEach-Object { $_.Name }); ReportOnlyCandidates = Join-Values ($ro | ForEach-Object { $_.Name }); Note = $(if ($NotAssessedReason) { $NotAssessedReason } else { $Recommendation }) })
         if ($result -in @('Gap', 'ReportOnlyOnly')) { Add-Issue -Category 'Gap' -Severity $GapSeverity -Code $gapCodes[$Check] -Policies $ro -Detail $(if ($result -eq 'ReportOnlyOnly') { "${Check}: only in report-only policies" } else { "${Check}: no enabled policy" }) -Recommendation $Recommendation -Reference $Reference } }
     $q = { param($Set, $Filter) @($Set | Where-Object $Filter) }
-    $isMfaBase = { $_.RequiresMfa -and (Test-AllUsersAllApps $_) }
+    $isMfaBase = { $_.RequiresMfa -and (Test-AllUserAllAppScope $_) }
     Add-Check 'MFA required for all users and all apps' 'CISA MS.AAD.3.2' (& $q $enabled $isMfaBase) (& $q ($active | Where-Object State -ne 'enabled') $isMfaBase) 'High' 'Enable one policy requiring MFA (or an authentication strength) for All users and All cloud apps, excluding only break-glass accounts'
     $isLegacy = { $_.IsBlock -and $_.IncUsers -contains 'All' -and $_.IncApps -contains 'All' -and ($_.ClientApps -contains 'exchangeActiveSync') -and ($_.ClientApps -contains 'other') }
     Add-Check 'Legacy authentication blocked' 'CISA MS.AAD.1.1' (& $q $enabled $isLegacy) (& $q ($active | Where-Object State -ne 'enabled') $isLegacy) 'High' 'Block client app types Exchange ActiveSync and Other clients for All users and All cloud apps'
@@ -619,7 +619,7 @@ try {
         if ($live -and $p.RequiresMfa) {
             $trustedEx = @($p.ExcLoc | Where-Object { $_ -eq 'AllTrusted' -or ($locById.ContainsKey($_) -and (Test-True $locById[$_].IsTrusted)) })
             if ($trustedEx.Count) { Add-Issue 'Exclusion' 'Medium' 'TrustedLocationBypass' @($p) ('MFA is skipped from: ' + (($trustedEx | ForEach-Object { if ($_ -eq 'AllTrusted') { 'All trusted locations' } else { Get-Name $_ } }) -join '; ')) 'Do not exempt network locations from MFA; use device compliance or phishing-resistant methods to reduce prompts instead' 'Zero Trust: verify explicitly' }
-            if ((Test-AllUsersAllApps $p) -and $p.ExcApps.Count) { Add-Issue 'Exclusion' 'Low' 'BaselineExcludesApps' @($p) ('MFA baseline excludes apps: ' + (($p.ExcApps | ForEach-Object { Get-Name $_ }) -join '; ')) 'Confirm each app exclusion is documented in the exception register with a compensating control' }
+            if ((Test-AllUserAllAppScope $p) -and $p.ExcApps.Count) { Add-Issue 'Exclusion' 'Low' 'BaselineExcludesApps' @($p) ('MFA baseline excludes apps: ' + (($p.ExcApps | ForEach-Object { Get-Name $_ }) -join '; ')) 'Confirm each app exclusion is documented in the exception register with a compensating control' }
         }
 
         # Broad excluded groups
@@ -698,7 +698,7 @@ try {
                 continue
             }
             if ($pairDone.ContainsKey($pk) -or $A.State -ne 'enabled' -or $B.State -ne 'enabled') { continue }
-            if (-not (Test-Covers $A $B)) { continue }
+            if (-not (Test-PolicyCoverage $A $B)) { continue }
             if ($A.IsBlock -and -not $B.IsBlock) { Add-Issue 'Conflict' 'High' 'BlockShadowsPolicy' @($A, $B) ("'{0}' blocks every sign-in '{1}' applies to, so '{1}' can never grant access" -f $A.Name, $B.Name) 'Narrow the block policy, or remove the shadowed policy' }
             elseif (-not $A.IsBlock -and -not $B.IsBlock -and $A.GrantCanon -eq $B.GrantCanon -and (-not $B.SessionCanon -or $B.SessionCanon -eq $A.SessionCanon)) { Add-Issue 'Overlap' 'Low' 'RedundantPolicy' @($B, $A) ("'{0}' requires the same controls for a subset of the sign-ins '{1}' already covers" -f $B.Name, $A.Name) "Remove '$($B.Name)' or fold its intent into '$($A.Name)'" }
         }
@@ -718,7 +718,7 @@ try {
             elseif ($p.UserActions.Count) { 'User action (security info / device registration)' }
             elseif ($p.IsBlock) { 'Block' }
             elseif ($p.PhishResistant) { 'Phishing-resistant MFA' }
-            elseif ($p.RequiresMfa -and (Test-AllUsersAllApps $p)) { 'MFA baseline (all users)' }
+            elseif ($p.RequiresMfa -and (Test-AllUserAllAppScope $p)) { 'MFA baseline (all users)' }
             elseif ($p.RequiresMfa -and $p.IncRoles.Count) { 'MFA for admin roles' }
             elseif ($p.RequiresMfa) { 'MFA (scoped)' }
             elseif ($p.Controls -contains 'compliantDevice' -or $p.Controls -contains 'domainJoinedDevice') { 'Device compliance' }
