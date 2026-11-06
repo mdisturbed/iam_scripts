@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.12.3 - 2026-11-06
+
+### Fixed
+- `34-Get-PrivilegedRegister.ps1` 1.0.1: an Entra role held as `[Activated (eligible, in use now)]` (script 02's label for an eligible assignment that is activated) was counted as standing access, because the check matched `[Activate…` as `[Active`. It now counts as just in time, so `AssignmentModel`, `Standing access not vaulted`, `Tier0StandingNotVaulted` and the role register's standing counts are right for PIM users. Rerun 34.
+
 ## 1.12.2 - 2026-11-06
 
 ### Changed

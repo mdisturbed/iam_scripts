@@ -1,6 +1,6 @@
 # 34 - Privileged register
 
-**Script:** [`34-Get-PrivilegedRegister.ps1`](../../scripts/34-Get-PrivilegedRegister.ps1) · **Version:** 1.0.0 · **Source:** earlier runs of 02, 04, 11, 17, 18, 22, 26, 27 (+ attestation file)
+**Script:** [`34-Get-PrivilegedRegister.ps1`](../../scripts/34-Get-PrivilegedRegister.ps1) · **Version:** 1.0.1 · **Source:** earlier runs of 02, 04, 11, 17, 18, 22, 26, 27 (+ attestation file)
 
 > Which privileged accounts and roles exist, who owns each one and why, is it vaulted, and which privilege is unmanaged?
 

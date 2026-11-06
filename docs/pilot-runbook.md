@@ -178,4 +178,4 @@ When a script is pilot-verified, hand it over with:
 | 31 Licence inventory | 1.0.0 | | | | | Mock-tested |
 | 32 MFA effectiveness | 1.0.1 | | | | | Mock-tested |
 | 33 CA policy analysis | 1.0.1 | | | | | Mock-tested |
-| 34 Privileged register | 1.0.0 | | | | | Mock-tested |
+| 34 Privileged register | 1.0.1 | | | | | Mock-tested |

@@ -37,6 +37,6 @@ One page per script: what it collects, parameters, output files, permissions, pi
 | 31 | [Licence inventory](31-licence-inventory.md) | Which Microsoft licences and service plans does the tenant actually have, how many are assigned, and which licence-dependent evidence could not be collected? | Entra (+ evidence folder) | 1.0.0 |
 | 32 | [MFA effectiveness](32-mfa-effectiveness.md) | Out of the agreed population, how many identities are actually protected by MFA, who is excluded and why, where did MFA fail in practice, and which evidence does each number come from? | 01 + 27 runs (+ exception register) | 1.0.1 |
 | 33 | [CA policy analysis](33-ca-policy-analysis.md) | For every Conditional Access policy: what is its scope, control, exclusions, state and dependencies? And where are the gaps, overlaps and conflicts between policies? | 28 run (+ 27, 01) | 1.0.1 |
-| 34 | [Privileged register](34-privileged-register.md) | Which privileged accounts and roles exist, who owns each one and why, is it vaulted, and which privilege is unmanaged? | 02/04/11/17/18/22/26/27 runs (+ attestation file) | 1.0.0 |
+| 34 | [Privileged register](34-privileged-register.md) | Which privileged accounts and roles exist, who owns each one and why, is it vaulted, and which privilege is unmanaged? | 02/04/11/17/18/22/26/27 runs (+ attestation file) | 1.0.1 |
 
 [← Back to README](../../README.md)

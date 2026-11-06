@@ -68,7 +68,7 @@
     .\34-Get-PrivilegedRegister.ps1 -OutputRoot D:\Evidence -NoPamPlatform -AttestationCsv D:\Engagement\registers\privileged-attestation.csv
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x. Earlier runs of 02 and 04 (11, 17, 18, 22, 26 and 27 when available).
 #>
 [CmdletBinding()]
@@ -88,7 +88,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '34-PrivilegedRegister'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $Server        = ''
 
 #region ---- Common helpers (identical in every non-directory script (AWS, event logs); self-contained by design) ----
@@ -381,8 +381,10 @@ try {
             $e = Get-Entry -Kind 'User' -Upn $r.UserPrincipalName -Sam '' -Name $r.DisplayName -FallbackKey "entra:$($r.UserPrincipalName)"
             $roles = "$($r.Roles)"
             Add-Privilege $e 'Entra' $roles (Test-True $r.HoldsTier0Role) "$($r.AccountEnabled)" (ConvertTo-DateOrNull $r.LastSignInUtc) @{ Script = '02'; R = $pu } $pu.Status
-            if ($roles -match '\[Active' -or "$($r.Flags)" -match 'PermanentActive') { $e.Standing = $true }
-            if ($roles -match '\[Eligible') { $e.Eligible = $true }
+            # 02 labels: [Active], [Active,Permanent], [Active via ...] are standing; [Eligible ...] and
+            # [Activated (eligible, in use now)] are just-in-time (an activation is not standing access).
+            if ($roles -match '\[Active(?!ted)' -or "$($r.Flags)" -match 'PermanentActive') { $e.Standing = $true }
+            if ($roles -match '\[(Eligible|Activated)') { $e.Eligible = $true }
             if (Test-True $r.IsBreakGlass) { $e.IsBreakGlass = $true }
             if ("$($r.Flags)" -match 'PermanentActive') { $e.Flags.Add('PermanentActiveRole') }
             if ("$($r.Flags)" -match 'NotMfaRegistered') { $e.Flags.Add('NotMfaRegistered') }
@@ -599,7 +601,7 @@ try {
     }
     elseif ($pu.Ok) {
         $byRole = @{}
-        foreach ($r in $pu.Rows) { foreach ($t in (Split-List $r.Roles)) { $rn = ($t -replace '\s*\[.*$', '').Trim(); if (-not $byRole.ContainsKey($rn)) { $byRole[$rn] = @{ H = 0; S = 0; E = 0 } }; $byRole[$rn].H++; if ($t -match '\[Active') { $byRole[$rn].S++ } elseif ($t -match '\[Eligible') { $byRole[$rn].E++ } } }
+        foreach ($r in $pu.Rows) { foreach ($t in (Split-List $r.Roles)) { $rn = ($t -replace '\s*\[.*$', '').Trim(); if (-not $byRole.ContainsKey($rn)) { $byRole[$rn] = @{ H = 0; S = 0; E = 0 } }; $byRole[$rn].H++; if ($t -match '\[Active(?!ted)') { $byRole[$rn].S++ } elseif ($t -match '\[(Eligible|Activated)') { $byRole[$rn].E++ } } }
         foreach ($rn in ($byRole.Keys | Sort-Object)) { Add-RoleRow 'Entra' $rn 'Directory' $false $byRole[$rn].H $byRole[$rn].S $byRole[$rn].E 'Not read (script 22 not usable)' '' (& $srcLabel '02' $pu) 'Partial' }
     }
     if ($adm.Ok) {
