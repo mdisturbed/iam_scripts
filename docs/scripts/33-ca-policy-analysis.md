@@ -1,6 +1,6 @@
 # 33 - CA policy analysis
 
-**Script:** [`33-Get-CaPolicyAnalysis.ps1`](../../scripts/33-Get-CaPolicyAnalysis.ps1) · **Version:** 1.0.1 · **Source:** a script 28 snapshot (+ 27, 01)
+**Script:** [`33-Get-CaPolicyAnalysis.ps1`](../../scripts/33-Get-CaPolicyAnalysis.ps1) · **Version:** 1.1.0 · **Source:** a script 28 snapshot (+ 27, 01)
 
 > For every Conditional Access policy: what is its scope, control, exclusions, state and dependencies? And where are the gaps, overlaps and conflicts between policies?
 
@@ -14,6 +14,7 @@ Analyses a script 28 snapshot offline. It gives one inventory row per policy and
 | `-SnapshotRunFolder` | latest 28 run | Pin the snapshot to analyse (for example the frozen pre-change baseline) |
 | `-PopulationRunFolder`, `-MfaRunFolder` | latest run | Pin the 27 or 01 run |
 | `-BreakGlassUpns` | (none) | Break-glass UPNs, in addition to 27's `BreakGlass` accounts |
+| `-NoBreakGlassAccounts` | off | State that no emergency access accounts exist: the break-glass check becomes a Gap and `NoBreakGlassAccounts` (High) is raised, instead of *Not assessed* |
 | `-ReportOnlyMaxDays` | `30` | Report-only policies untouched for longer are `ReportOnlyStale` |
 | `-DisabledMaxDays` | `90` | Disabled policies untouched for longer are `DisabledStale` |
 | `-BroadExclusionThreshold` | `25` | Excluded groups with more members are `BroadExclusion` |
@@ -43,6 +44,7 @@ Issue codes:
 | Category | Code | Severity | Meaning |
 |----------|------|----------|---------|
 | Gap | `NoMfaForAllUsers`, `LegacyAuthNotBlocked`, `NoAdminMfa` | High | Tenant baseline missing (CISA MS.AAD.3.2, 1.1) |
+| Gap | `NoBreakGlassAccounts` | High | No emergency access accounts (with `-NoBreakGlassAccounts`) |
 | Gap | `NoPhishResistantAdminMfa`, `DeviceCodeFlowNotBlocked`, `NoUserRiskPolicy`, `NoSignInRiskPolicy`, `NoGuestMfa` | Medium | (CISA MS.AAD.3.6, 3.9, 2.1, 2.3) |
 | Gap | `SecurityInfoRegistrationUnprotected` | Low | Register security info not protected (CISA MS.AAD.3.8) |
 | Conflict | `BlockShadowsPolicy` | High | A block policy covers every sign-in another enabled policy covers, so that policy can never grant access |

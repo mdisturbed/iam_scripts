@@ -2,6 +2,18 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.13.0 - 2026-11-06
+
+### Added
+- `01-Get-MfaCoverage.ps1` 1.2.0: new dataset `ca-included-scope-members`. Every account an enabled or report-only MFA policy targets by user, group (transitive members) or role (holders, with `EffectiveForCa`). `-SkipIncludedScopeMembers` turns it off. No new permissions: Directory.Read.All already covers group members.
+- `33-Get-CaPolicyAnalysis.ps1` 1.1.0: `-NoBreakGlassAccounts` records that no emergency access accounts exist. The break-glass check becomes a Gap and issue `NoBreakGlassAccounts` (High) is raised, instead of *Not assessed*.
+
+### Changed
+- `32-Get-MfaEffectiveness.ps1` 1.1.0: policies named with `-MfaPolicyNames` that target groups or roles now cover the accounts in 01's `ca-included-scope-members`, instead of making enforcement `Unknown`. This is for tenants that enforce MFA per app and per group. An app-limited policy shows `only apps: …` in `LeavesOut` and enforcement `EnforcedWithConditions`. Needs a 01 run at 1.2.0 or later.
+
+### Testing
+- 01 run end to end against a stub Graph module (user, group and role targeting). 32 and 33 run against mock run folders with a group-targeted, app-limited MFA policy and with `-NoBreakGlassAccounts`. Test-ReadOnly and the guardrail pass.
+
 ## 1.12.3 - 2026-11-06
 
 ### Fixed
