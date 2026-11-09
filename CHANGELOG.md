@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.14.1 - 2026-11-09
+
+### Fixed
+- `01-Get-MfaCoverage.ps1` 1.2.1: `ca-included-scope-members` wrote one row per included group instead of one per member. `Invoke-GraphGetAll` returns a single List object, and wrapping it in `@()` made the whole member list one item, so `MemberId` held every id and `MemberUPN` was blank. As a result, script 32 saw almost nobody as covered by group-targeted MFA policies. The mock test had one member per group, which hid it; it now has two. Rerun 01, then 32. The existing `Get-GroupMembersDeep` helpers in other scripts are not affected: they unwrap the list on return.
+
 ## 1.14.0 - 2026-11-06
 
 ### Added

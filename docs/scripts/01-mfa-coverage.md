@@ -1,6 +1,6 @@
 # 01 - MFA coverage
 
-**Script:** [`01-Get-MfaCoverage.ps1`](../../scripts/01-Get-MfaCoverage.ps1) · **Version:** 1.2.0 · **Source:** Entra
+**Script:** [`01-Get-MfaCoverage.ps1`](../../scripts/01-Get-MfaCoverage.ps1) · **Version:** 1.2.1 · **Source:** Entra
 
 > Is MFA actually enforced everywhere, how strong is it, and who is left out?
 

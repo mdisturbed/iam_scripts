@@ -45,7 +45,7 @@
     .\01-Get-MfaCoverage.ps1 -AuthMode AppCertificate -TenantId tenant-id-redacted -ClientId <app-id> -CertificateThumbprint <thumbprint>
 
 .NOTES
-    Version : 1.2.0
+    Version : 1.2.1
     Requires: PowerShell 5.1 or 7.x, module Microsoft.Graph.Authentication (only)
     Scopes  : Policy.Read.All, Directory.Read.All, AuditLog.Read.All, UserAuthenticationMethod.Read.All,
               RoleManagement.Read.Directory, PrivilegedEligibilitySchedule.Read.AzureADGroup (not with -SkipPrivilegeJoin)
@@ -77,7 +77,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '01-MfaCoverage'
-$ScriptVersion = '1.2.0'
+$ScriptVersion = '1.2.1'
 $RequiredScopes = @('Policy.Read.All', 'Directory.Read.All', 'AuditLog.Read.All', 'UserAuthenticationMethod.Read.All')
 if (-not $SkipPrivilegeJoin) { $RequiredScopes += @('RoleManagement.Read.Directory', 'PrivilegedEligibilitySchedule.Read.AzureADGroup') }
 
@@ -924,14 +924,16 @@ try {
                 }
                 'Group' {
                     if (-not $groupCache.ContainsKey($s.Id)) {
-                        try { $groupCache[$s.Id] = @(Invoke-GraphGetAll -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/transitiveMembers?`$select=id,displayName,userPrincipalName,accountEnabled" -f $s.Id) -Label "transitiveMembers $($s.Id)") }
+                        try { $groupCache[$s.Id] = Invoke-GraphGetAll -Uri ("https://graph.microsoft.com/v1.0/groups/{0}/transitiveMembers?`$select=id,displayName,userPrincipalName,accountEnabled" -f $s.Id) -Label "transitiveMembers $($s.Id)" }
                         catch {
                             $groupCache[$s.Id] = $null
                             $scopeFailed.Add(('{0} (HTTP {1})' -f $s.Name, (Get-HttpStatusFromError $_)))
                             Write-RunLog ("Members of included group {0} not readable: {1}" -f $s.Name, $_.Exception.Message) 'WARN'
                         }
                     }
-                    foreach ($m in @($groupCache[$s.Id] | Where-Object { $_ })) {
+                    # Invoke-GraphGetAll returns one List object: iterate it directly (wrapping it in @() makes the whole list one item).
+                    foreach ($m in $groupCache[$s.Id]) {
+                        if (-not $m) { continue }
                         $scopeRows.Add([pscustomobject][ordered]@{ PolicyName = $s.PolicyName; PolicyState = $s.PolicyState; IncludedVia = 'Group'; ScopeId = $s.Id; ScopeName = $s.Name; MemberId = $m.id
                                 MemberType = ($m.'@odata.type' -replace '#microsoft.graph.', ''); MemberDisplayName = $m.displayName
                                 MemberUPN = $(if ($m.PSObject.Properties.Name -contains 'userPrincipalName') { $m.userPrincipalName } else { '' })
