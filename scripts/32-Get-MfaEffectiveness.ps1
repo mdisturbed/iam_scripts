@@ -60,6 +60,16 @@
 .PARAMETER MfaPolicyNames
     Exact names of the policies to count as baseline MFA policies, instead of detecting them.
 
+.PARAMETER MfaPolicyNamesFile
+    Text file with one baseline policy name per line (blank lines and lines starting with # are ignored).
+    Default: <parent of EvidenceRoot>\config\mfa-baseline-policies.txt, for the engagement layout
+    IAM-Evidence\evidence + IAM-Evidence\config. Read when -MfaPolicyNames is not given and the file
+    exists, so a rerun uses the same baseline without retyping it. -MfaPolicyNames wins over the file.
+
+.PARAMETER SaveMfaPolicyNames
+    Write the names given with -MfaPolicyNames to -MfaPolicyNamesFile (creating the config folder), so
+    later runs pick them up without the parameter.
+
 .PARAMETER ExceptionRegisterCsv
     Exception register (examples\exception-register.example.csv). Rows with Status Accepted or Approved,
     not expired, whose Identity or Scope names a user or excluded group mark that exclusion as approved.
@@ -83,9 +93,12 @@
     .\32-Get-MfaEffectiveness.ps1 -OutputRoot D:\Evidence -ExceptionRegisterCsv D:\Engagement\registers\exception-register.csv
 .EXAMPLE
     .\32-Get-MfaEffectiveness.ps1 -OutputRoot D:\Evidence -MfaPolicyNames 'Require MFA - all users', 'Require MFA - guests'
+.EXAMPLE
+    .\32-Get-MfaEffectiveness.ps1 -OutputRoot D:\Engagement\evidence -MfaPolicyNames 'Require MFA - all users' -SaveMfaPolicyNames
+    Later runs: .\32-Get-MfaEffectiveness.ps1 -OutputRoot D:\Engagement\evidence  (reads D:\Engagement\config\mfa-baseline-policies.txt)
 
 .NOTES
-    Version : 1.2.0
+    Version : 1.3.0
     Requires: PowerShell 5.1 or 7.x. Earlier runs of 01 and (for an agreed denominator) 27 in the evidence folder.
 #>
 [CmdletBinding()]
@@ -96,6 +109,8 @@ param(
     [string]$MfaRunFolder = '',
     [string]$PopulationRunFolder = '',
     [string[]]$MfaPolicyNames = @(),
+    [string]$MfaPolicyNamesFile = '',
+    [switch]$SaveMfaPolicyNames,
     [string]$ExceptionRegisterCsv = '',
     [int]$MaxRunSpreadDays = 7,
     [string[]]$TokenBrokerApps = @('Microsoft Authentication Broker', 'Windows Sign In'),
@@ -105,7 +120,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '32-MfaEffectiveness'
-$ScriptVersion = '1.2.0'
+$ScriptVersion = '1.3.0'
 $Server        = ''
 
 #region ---- Common helpers (identical in every non-directory script (AWS, event logs); self-contained by design) ----
@@ -339,6 +354,25 @@ try {
     if (-not (Test-Path -LiteralPath $EvidenceRoot)) { throw "Evidence folder not found: $EvidenceRoot" }
     $now = $script:RunStartUtc
 
+    # Baseline policy names: -MfaPolicyNames, else the config file, else detection.
+    if (-not $MfaPolicyNamesFile) { $MfaPolicyNamesFile = Join-Path (Join-Path (Split-Path -Path ([IO.Path]::GetFullPath($EvidenceRoot)) -Parent) 'config') 'mfa-baseline-policies.txt' }
+    $policyNamesSource = 'Detected'
+    if ($MfaPolicyNames.Count) {
+        $MfaPolicyNames = @($MfaPolicyNames | Where-Object { "$_".Trim() } | ForEach-Object { "$_".Trim() } | Select-Object -Unique)
+        $policyNamesSource = '-MfaPolicyNames'
+        if ($SaveMfaPolicyNames) {
+            New-Item -ItemType Directory -Path (Split-Path $MfaPolicyNamesFile -Parent) -Force | Out-Null
+            @("# Baseline MFA policies for script 32, one exact policy name per line. Saved $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')) by 32 v$ScriptVersion.") + $MfaPolicyNames | Set-Content -Path $MfaPolicyNamesFile -Encoding UTF8
+            Write-RunLog "Saved $($MfaPolicyNames.Count) baseline policy name(s) to $MfaPolicyNamesFile"
+        }
+    }
+    elseif (Test-Path -LiteralPath $MfaPolicyNamesFile) {
+        $MfaPolicyNames = @(Get-Content -LiteralPath $MfaPolicyNamesFile -Encoding UTF8 | ForEach-Object { "$_".Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') } | Select-Object -Unique)
+        $policyNamesSource = "File $(Split-Path $MfaPolicyNamesFile -Leaf)"
+        Write-RunLog "Baseline policy names from $MfaPolicyNamesFile ($($MfaPolicyNames.Count))"
+    }
+    elseif ($SaveMfaPolicyNames) { Write-RunLog '-SaveMfaPolicyNames needs -MfaPolicyNames; nothing saved' 'WARN' }
+
     # ---- 1. Sources ----
     $run01 = Resolve-SourceRun -Number '01' -Pinned $MfaRunFolder
     $run27 = Resolve-SourceRun -Number '27' -Pinned $PopulationRunFolder
@@ -401,18 +435,19 @@ try {
     $baseline = @()
     if ($pol.Ok) {
         foreach ($p in $pol.Rows) {
-            $verdict = $(if ($MfaPolicyNames.Count) { if ($MfaPolicyNames -notcontains $p.PolicyName) { 'Not named in -MfaPolicyNames' } elseif ("$($p.State)" -ne 'enabled') { "Named in -MfaPolicyNames but state is $($p.State)" } else { 'Baseline' } } else { Get-BaselineVerdict $p })
+            $verdict = $(if ($MfaPolicyNames.Count) { if ($MfaPolicyNames -notcontains $p.PolicyName) { "Not named ($policyNamesSource)" } elseif ("$($p.State)" -ne 'enabled') { "Named ($policyNamesSource) but state is $($p.State)" } else { 'Baseline' } } else { Get-BaselineVerdict $p })
             if (-not (Test-True $p.RequiresMfa) -and $verdict -ne 'Baseline') { continue }
             $policyRows.Add([pscustomobject][ordered]@{
-                    PolicyName = $p.PolicyName; State = $p.State; CountsAsBaseline = ($verdict -eq 'Baseline'); Reason = $(if ($verdict -eq 'Baseline') { $(if ($MfaPolicyNames.Count) { 'Named in -MfaPolicyNames' } else { 'Enabled, MFA, all users, all apps, all clients' }) } else { $verdict })
+                    PolicyName = $p.PolicyName; State = $p.State; CountsAsBaseline = ($verdict -eq 'Baseline'); Reason = $(if ($verdict -eq 'Baseline') { $(if ($MfaPolicyNames.Count) { "Named ($policyNamesSource)" } else { 'Enabled, MFA, all users, all apps, all clients' }) } else { $verdict })
                     LeavesOut = $(if ($verdict -eq 'Baseline') { Get-BaselineCondition $p } else { '' })
                     IncludeUsers = $p.IncludeUsers; IncludeGroups = $p.IncludeGroups; IncludeRoles = $p.IncludeRoles; ExcludeUsers = $p.ExcludeUsers; ExcludeGroups = $p.ExcludeGroups; ExcludeRoles = $p.ExcludeRoles
                     IncludeApplications = $p.IncludeApplications; ExcludeApplications = $p.ExcludeApplications; GrantControls = $p.GrantControls; AuthStrength = $p.AuthStrength
                 })
             if ($verdict -eq 'Baseline') { $baseline += $p }
         }
-        foreach ($n in $MfaPolicyNames) { if (-not @($pol.Rows | Where-Object { $_.PolicyName -eq $n }).Count) { Write-RunLog "Policy named in -MfaPolicyNames not found: $n" 'WARN' } }
+        foreach ($n in $MfaPolicyNames) { if (-not @($pol.Rows | Where-Object { $_.PolicyName -eq $n }).Count) { Write-RunLog "Baseline policy name ($policyNamesSource) not found in 01 ca-policies: $n" 'WARN' } }
         Write-RunLog ("Baseline MFA policies: {0} ({1})" -f $baseline.Count, (($baseline | ForEach-Object { $_.PolicyName }) -join '; '))
+        if (-not $baseline.Count) { Write-RunLog ("NO baseline MFA policy ({0}): Protected and Enforced will be 0. Name the policies with -MfaPolicyNames, and add -SaveMfaPolicyNames to keep them in {1}" -f $policyNamesSource, $MfaPolicyNamesFile) 'WARN' }
     }
     Export-Dataset -Name 'mfa-baseline-policies' -Rows $policyRows -Status $(if ($pol.Ok) { $pol.Status } else { 'Blocked' }) -Note $(if ($pol.Ok) { 'CountsAsBaseline = True decides enforcement; other MFA policies are listed with the reason they do not count' } else { $pol.Note })
 
@@ -681,7 +716,7 @@ try {
         if ($TokenBrokerApps.Count) { Add-Measure $pn 'With token broker / Windows sign-in (PRT) events only' (& $c { [int]$_.TokenBrokerSignIns -gt 0 -and [int]$_.SingleFactorSignInsExBroker -eq 0 }) $n 'Every single-factor sign-in is a token broker or Windows sign-in (PRT) event: not a failure' $popSrc (Get-WorstStatus @($st, $sfStatus)) $sfNote }
         Add-Measure $pn 'With legacy authentication sign-ins' (& $c { [int]$_.LegacyAuthSignIns -gt 0 }) $n 'At least one successful legacy-protocol sign-in' $popSrc (Get-WorstStatus @($st, $sfStatus))
     }
-    Add-Measure 'Tenant' 'Baseline MFA policies' $baseline.Count '' (Join-Values ($baseline | ForEach-Object { $_.PolicyName })) $src01 $(if ($pol.Ok) { $pol.Status } else { 'Blocked' }) $(if ($MfaPolicyNames.Count) { 'Named with -MfaPolicyNames' } else { 'Detected: enabled, MFA, all users, all apps, all clients, no risk / include-location / include-platform condition' })
+    Add-Measure 'Tenant' 'Baseline MFA policies' $baseline.Count '' (Join-Values ($baseline | ForEach-Object { $_.PolicyName })) $src01 $(if ($pol.Ok) { $pol.Status } else { 'Blocked' }) $(if ($MfaPolicyNames.Count) { "Named ($policyNamesSource)" } else { 'Detected: enabled, MFA, all users, all apps, all clients, no risk / include-location / include-platform condition' + $(if (-not $baseline.Count -and $pol.Ok -and @($pol.Rows | Where-Object { "$($_.State)" -eq 'enabled' -and (Test-True $_.RequiresMfa) }).Count) { '. NONE detected although enabled MFA policies exist: name them with -MfaPolicyNames (and -SaveMfaPolicyNames)' } else { '' }) })
     if ($popEx.Ok) { Add-Measure 'Tenant' 'Enabled accounts left out of the workforce population' @($exRows | Where-Object { $_.ExclusionKind -eq 'Population' }).Count '' 'Script 27 population-exclusions for the Entra workforce (category rules, approved exclusions, no HR match, HR not active)' $src27 $popEx.Status }
     Add-Measure 'Tenant' 'Single-factor sign-ins by accounts outside every population' @($failRows | Where-Object { -not $_.InScope -and -not $_.IsTokenBroker }).Count '' 'Service, shared or unclassified accounts signing in without MFA (rows; token broker / Windows sign-in rows not counted)' $src01 $sfStatus
     Export-Dataset -Name 'mfa-effectiveness-measures' -Rows $measures -Status $(if ((Get-WorstStatus @($measures | ForEach-Object { $_.Status })) -eq 'Completed') { 'Completed' } else { 'Partial' }) -Note ('Status per row; a row that is not Completed says why in Note or in source-runs. ' + ($denomNotes -join '; '))
@@ -699,6 +734,7 @@ try {
     $pp = @($measures | Where-Object { $_.Population -like 'Privileged*' -and $_.Measure -eq 'Protected (registered and enforced)' }) | Select-Object -First 1
     if ($pp) { Add-Metric 'Privileged accounts protected' $pp.Value $(if ("$($pp.Percent)" -ne '') { "$($pp.Percent)% of $($pp.Denominator) [$($pp.Status)]" } else { "[$($pp.Status)]" }) }
     Add-Metric 'Baseline MFA policies' $baseline.Count (Join-Values ($baseline | ForEach-Object { $_.PolicyName }))
+    Add-Metric 'Baseline policy names from' $policyNamesSource $(if ($policyNamesSource -like 'File*') { $MfaPolicyNamesFile } elseif (-not $baseline.Count) { 'No baseline policy: Protected and Enforced are 0. Name the policies with -MfaPolicyNames (add -SaveMfaPolicyNames to keep them)' } else { '' })
     Add-Metric 'Identities assessed' $rows.Count
     Add-Metric 'Source datasets not usable' @($script:SourceRows | Where-Object { $_.UsedAs -like 'Not used:*' }).Count (Join-Values ($script:SourceRows | Where-Object { $_.UsedAs -like 'Not used:*' } | ForEach-Object { "$($_.Script) $($_.Dataset): $($_.UsedAs -replace '^Not used: ', '')" }))
     Add-Metric 'Source files failing the SHA-256 check' @($script:SourceRows | Where-Object { $_.HashCheck -eq 'Mismatch' }).Count
@@ -709,6 +745,6 @@ catch {
     throw
 }
 finally {
-    Write-RunManifest -DomainName '' -Parameters @{ EvidenceRoot = $EvidenceRoot; MfaRunFolder = $MfaRunFolder; PopulationRunFolder = $PopulationRunFolder; MfaPolicyNames = $MfaPolicyNames; ExceptionRegisterCsv = $(if ($ExceptionRegisterCsv) { Split-Path $ExceptionRegisterCsv -Leaf } else { '' }); MaxRunSpreadDays = $MaxRunSpreadDays; AllowHashMismatch = [bool]$AllowHashMismatch }
+    Write-RunManifest -DomainName '' -Parameters @{ EvidenceRoot = $EvidenceRoot; MfaRunFolder = $MfaRunFolder; PopulationRunFolder = $PopulationRunFolder; MfaPolicyNames = $MfaPolicyNames; MfaPolicyNamesSource = $policyNamesSource; ExceptionRegisterCsv = $(if ($ExceptionRegisterCsv) { Split-Path $ExceptionRegisterCsv -Leaf } else { '' }); MaxRunSpreadDays = $MaxRunSpreadDays; AllowHashMismatch = [bool]$AllowHashMismatch }
     Write-RunLog ("Finished. Evidence folder: {0}" -f $script:RunFolder)
 }

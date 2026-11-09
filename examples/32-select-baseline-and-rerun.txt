@@ -8,6 +8,9 @@
 #   - risk-based policies (sign-in risk or user risk)
 #   - authentication-context policies (step-up only)
 # App-limited and group-scoped policies count; 32 marks them EnforcedWithConditions.
+# PART B saves the names to IAM-Evidence\config\mfa-baseline-policies.txt; after that a plain
+#   .\scripts\32-Get-MfaEffectiveness.ps1 -OutputRoot "$HOME\IAM-Evidence\evidence"
+# uses the same baseline.
 # =====================================================================
 
 
@@ -36,7 +39,7 @@ Write-Host "Baseline: $($names.Count) policies. If that looks right, paste PART 
 # ---------------------------------------------------------------------
 if (-not $names.Count) { Write-Host 'No baseline policies selected - run PART A first.' -ForegroundColor Red }
 else {
-    .\scripts\32-Get-MfaEffectiveness.ps1 -OutputRoot $ev -MfaPolicyNames $names
+    .\scripts\32-Get-MfaEffectiveness.ps1 -OutputRoot $ev -MfaPolicyNames $names -SaveMfaPolicyNames
     $r32 = (Get-ChildItem "$ev\32-MfaEffectiveness" -Directory | Where-Object Name -notlike '_*' | Sort-Object Name | Select-Object -Last 1).FullName
     Write-Host "32 run: $(Split-Path $r32 -Leaf)" -ForegroundColor Cyan
     Import-Csv "$r32\summary.csv" | Format-Table -AutoSize -Wrap

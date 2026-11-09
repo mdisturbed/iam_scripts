@@ -2,6 +2,12 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.16.0 - 2026-11-09
+
+### Added
+- `32-Get-MfaEffectiveness.ps1` 1.3.0: baseline policy names can live in a file. `-MfaPolicyNamesFile` (default `<parent of EvidenceRoot>\config\mfa-baseline-policies.txt`, one name per line, `#` comments) is read when `-MfaPolicyNames` is not given; `-SaveMfaPolicyNames` writes the names given on the command line to it. A run with no baseline policy now logs a warning and says so in the summary instead of quietly reporting Protected and Enforced as 0. New summary row *Baseline policy names from* and manifest parameter `MfaPolicyNamesSource`.
+- `examples/32-select-baseline-and-rerun.txt`: Part B saves the selected names with `-SaveMfaPolicyNames`.
+
 ## 1.15.1 - 2026-11-09
 
 ### Added
