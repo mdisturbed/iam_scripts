@@ -211,6 +211,7 @@ iam_scripts/
 │   ├── discovery-catalog.psd1    script list, what each needs and the access it requires (launcher, report, access request)
 │   ├── New-FindingEvidence.ps1   pre-fills a Jira finding's Scope, Evidence and Closure from a run folder
 │   ├── Compare-RunFolders.ps1    before / after evidence: two runs of the same script, row and metric changes
+│   ├── Merge-EvidenceRuns.ps1    moves run folders written outside the evidence root back into it (preview, then -Go)
 │   ├── Get-KpiSummary.ps1        KPIs from the latest runs, divided by the script 27 population
 │   ├── New-EvidencePackage.ps1   evidence intake log, hash re-check and per-deliverable status
 │   ├── New-Engagement.ps1        creates an engagement folder: evidence, registers, config, findings, workbook, README

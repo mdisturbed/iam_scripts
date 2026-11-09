@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.15.1 - 2026-11-09
+
+### Added
+- `tools/Merge-EvidenceRuns.ps1` 1.0.0: finds run folders (`yyyyMMdd-HHmmssZ` with a `run-manifest.json`) written outside the evidence root, for example one level up after a wrong `-OutputRoot`, and moves each to `<Target>\<Script>\<timestamp>` using the script name from its manifest. Runs under a `_` folder (`_aborted`, `_superseded`) keep that marker. Preview by default, `-Go` to move; existing destinations are skipped; non-run folders are not touched; emptied folders are listed. Moving keeps SHA-256 checks valid.
+
 ## 1.15.0 - 2026-11-09
 
 ### Changed
