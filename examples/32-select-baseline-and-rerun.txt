@@ -1,0 +1,46 @@
+# =====================================================================
+# 32 - pick the baseline MFA policies from 01's export, then rerun 32
+# Copy and paste PART A, check the table, then paste PART B.
+# Read-only: reads run folders, writes a new 32 run folder.
+#
+# Baseline rule: every ENABLED policy that requires MFA, except
+#   - user-action policies (register security info, register or join devices)
+#   - risk-based policies (sign-in risk or user risk)
+#   - authentication-context policies (step-up only)
+# App-limited and group-scoped policies count; 32 marks them EnforcedWithConditions.
+# =====================================================================
+
+
+# ---------------------------------------------------------------------
+# PART A - list the enabled MFA policies and apply the rule
+# ---------------------------------------------------------------------
+cd "$HOME\Tools\iam_scripts"
+$ev  = "$HOME\IAM-Evidence\evidence"
+$r01 = (Get-ChildItem "$ev\01-MfaCoverage" -Directory | Where-Object Name -notlike '_*' | Sort-Object Name | Select-Object -Last 1).FullName
+$mfaPol = @(Import-Csv "$r01\ca-policies.csv" | Where-Object { $_.State -eq 'enabled' -and $_.RequiresMfa -eq 'True' })
+Write-Host "01 run: $(Split-Path $r01 -Leaf)  -  $($mfaPol.Count) enabled MFA policies" -ForegroundColor Cyan
+$rows = foreach ($p in $mfaPol) {
+    $why = $(if ($p.UserActions) { "User action: $($p.UserActions)" }
+        elseif ($p.SignInRiskLevels -or $p.UserRiskLevels) { "Risk-based: $($p.SignInRiskLevels) $($p.UserRiskLevels)".Trim() }
+        elseif ("$($p.IncludeApplications)" -match 'authenticationContext|^c\d+$|; ?c\d+') { 'Authentication context' }
+        else { '' })
+    [pscustomobject]@{ Counts = -not $why; PolicyName = $p.PolicyName; WhyNot = $why; Users = $p.IncludeUsers; Apps = $p.IncludeApplications }
+}
+$rows | Sort-Object Counts -Descending | Format-Table Counts, PolicyName, WhyNot -AutoSize -Wrap
+$names = @($rows | Where-Object Counts | ForEach-Object PolicyName)
+Write-Host "Baseline: $($names.Count) policies. If that looks right, paste PART B." -ForegroundColor Cyan
+
+
+# ---------------------------------------------------------------------
+# PART B - run 32 with those policies and show the results
+# ---------------------------------------------------------------------
+if (-not $names.Count) { Write-Host 'No baseline policies selected - run PART A first.' -ForegroundColor Red }
+else {
+    .\scripts\32-Get-MfaEffectiveness.ps1 -OutputRoot $ev -MfaPolicyNames $names
+    $r32 = (Get-ChildItem "$ev\32-MfaEffectiveness" -Directory | Where-Object Name -notlike '_*' | Sort-Object Name | Select-Object -Last 1).FullName
+    Write-Host "32 run: $(Split-Path $r32 -Leaf)" -ForegroundColor Cyan
+    Import-Csv "$r32\summary.csv" | Format-Table -AutoSize -Wrap
+    Import-Csv "$r32\mfa-failures.csv" |
+        Where-Object { $_.InScope -eq 'True' -and $_.IsTokenBroker -eq 'False' -and $_.Populations -match 'Human workforce' } |
+        Group-Object LikelyCause | Sort-Object Count -Descending | Format-Table Count, Name -AutoSize
+}
