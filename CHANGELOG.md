@@ -2,6 +2,14 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.15.0 - 2026-11-09
+
+### Changed
+- `32-Get-MfaEffectiveness.ps1` 1.2.0: single-factor sign-ins by Microsoft Authentication Broker and Windows Sign In (`-TokenBrokerApps`) are no longer counted as MFA failures. Entra logs them as single-factor with Conditional Access not applied because CA is not evaluated when a Primary Refresh Token is issued or renewed; MFA was satisfied earlier in the session. They stay in `mfa-failures.csv` with `IsTokenBroker = True` and cause *Token broker / Windows sign-in (PRT)*. Legacy-protocol sign-ins are never treated as broker events. `With successful single-factor sign-ins (failures)` now leaves them out. New measures: `… (raw)` (all single-factor sign-ins, the old figure), `With token broker / Windows sign-in (PRT) events only` and `Protected with no single-factor sign-in (excluding token broker)`. New identity columns `TokenBrokerSignIns` and `SingleFactorSignInsExBroker`, flag `TokenBrokerSignInOnly`. The summary adds `Enforced only with conditions` and the raw failure count. `-TokenBrokerApps @()` restores the old counting. No new sources: rerun 32 only.
+
+### Fixed
+- `32-Get-MfaEffectiveness.ps1`: a summary percent of 0 was shown without the percent.
+
 ## 1.14.1 - 2026-11-09
 
 ### Fixed

@@ -26,7 +26,12 @@
       - MfaState     Protected (registered and enforced), EnforcedNotRegistered, RegisteredNotEnforced,
                      Excluded, Unprotected, NoRegistrationData, Unknown
       - Failures     successful single-factor sign-ins in 01's lookback window (interactive, and
-                     non-interactive when collected), with the likely cause
+                     non-interactive when collected), with the likely cause. Sign-ins by the token broker
+                     and Windows logon (-TokenBrokerApps: Microsoft Authentication Broker, Windows Sign In)
+                     are logged as single-factor with Conditional Access not applied because CA is not
+                     evaluated when a Primary Refresh Token is issued or renewed; MFA was satisfied earlier
+                     in the session. They are kept in mfa-failures with IsTokenBroker = True and reported
+                     as a separate measure, so the failure count is shown with and without them.
 
     Datasets:
       - mfa-effectiveness-measures  one row per population and measure: value, denominator, percent,
@@ -63,6 +68,11 @@
     When the 01 and 27 runs are further apart than this, measures are Partial (numerator and denominator
     from different points in time).
 
+.PARAMETER TokenBrokerApps
+    AppDisplayName values treated as token-broker / Windows sign-in (PRT) events: logged as single-factor
+    with CA not applied by design, not MFA bypasses. Legacy-protocol sign-ins are never treated as broker
+    events. Pass @() to count every single-factor sign-in as a failure.
+
 .PARAMETER AllowHashMismatch
     Use a source file whose SHA-256 no longer matches its run (the result is Partial). Off by default:
     a changed file is Blocked.
@@ -75,7 +85,7 @@
     .\32-Get-MfaEffectiveness.ps1 -OutputRoot D:\Evidence -MfaPolicyNames 'Require MFA - all users', 'Require MFA - guests'
 
 .NOTES
-    Version : 1.1.0
+    Version : 1.2.0
     Requires: PowerShell 5.1 or 7.x. Earlier runs of 01 and (for an agreed denominator) 27 in the evidence folder.
 #>
 [CmdletBinding()]
@@ -88,13 +98,14 @@ param(
     [string[]]$MfaPolicyNames = @(),
     [string]$ExceptionRegisterCsv = '',
     [int]$MaxRunSpreadDays = 7,
+    [string[]]$TokenBrokerApps = @('Microsoft Authentication Broker', 'Windows Sign In'),
     [switch]$AllowHashMismatch
     # -------------------------------------------------------------------------
 )
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '32-MfaEffectiveness'
-$ScriptVersion = '1.1.0'
+$ScriptVersion = '1.2.0'
 $Server        = ''
 
 #region ---- Common helpers (identical in every non-directory script (AWS, event logs); self-contained by design) ----
@@ -265,6 +276,13 @@ function Split-List { param([string]$Text) if (-not $Text) { return @() } return
 #endregion
 
 # ---- Script-specific helpers ----
+function Test-TokenBrokerSignIn {
+    # Token broker / Windows logon (PRT) sign-in: single-factor and CA not applied by design (CA is not evaluated on PRT issue or renewal).
+    param($Row)
+    if (-not $TokenBrokerApps.Count -or (Test-LegacySignIn $Row)) { return $false }
+    return ($TokenBrokerApps -contains "$($Row.AppDisplayName)".Trim())
+}
+
 function Get-Percent { param($Part, $Whole) if ($null -eq $Whole -or "$Whole" -eq '' -or [int]$Whole -eq 0 -or "$Part" -eq '') { return '' } return [math]::Round(100.0 * [double]$Part / [double]$Whole, 1) }
 
 function Get-BaselineVerdict {
@@ -525,8 +543,14 @@ try {
             else { 'NotCovered' })
         $registered = $(if ($r) { Test-True $r.IsMfaRegistered } else { $null })
         $sfList = $(if ($upn -and $sfByUpn.ContainsKey($upn.ToLowerInvariant())) { @($sfByUpn[$upn.ToLowerInvariant()]) } else { @() })
-        $sfCount = 0; $legacyCount = 0
-        foreach ($s in $sfList) { $sfCount += [int]("0$($s.Row.SignInCount)"); if (Test-LegacySignIn $s.Row) { $legacyCount += [int]("0$($s.Row.SignInCount)") } }
+        $sfCount = 0; $legacyCount = 0; $brokerCount = 0
+        foreach ($s in $sfList) {
+            $cnt = [int]("0$($s.Row.SignInCount)")
+            $sfCount += $cnt
+            if (Test-LegacySignIn $s.Row) { $legacyCount += $cnt }
+            elseif (Test-TokenBrokerSignIn $s.Row) { $brokerCount += $cnt }
+        }
+        $sfOtherCount = $sfCount - $brokerCount
         $state = $(if (-not $r) { 'NoRegistrationData' }
             elseif ($enforcement -eq 'Unknown') { 'Unknown' }
             elseif ($enforcement -eq 'Excluded') { 'Excluded' }
@@ -537,7 +561,8 @@ try {
         $viaNames = @($excl | ForEach-Object { $_.ViaName }) + @($upn)
         $approved = $(if ($excludedFrom.Count) { Test-ExceptionApproved $viaNames } else { '' })
         $flags = @(
-            $(if ($sfCount) { 'SingleFactorSignIn' })
+            $(if ($sfOtherCount) { 'SingleFactorSignIn' })
+            $(if ($brokerCount -and -not $sfOtherCount) { 'TokenBrokerSignInOnly' })
             $(if ($legacyCount) { 'LegacyAuthSignIn' })
             $(if ($r -and (Test-True $r.HasPhoneMethodOnly)) { 'PhoneOnly' })
             $(if ($excludedFrom.Count -and $covering.Count) { 'PartiallyExcluded' })
@@ -558,7 +583,7 @@ try {
             ExcludedFrom = Join-Values $excludedFrom
             ExclusionVia = Join-Values (@($excl | ForEach-Object { '{0}: {1}' -f $_.Via, $_.ViaName } | Sort-Object -Unique) + $(if ($guestTypeHit.Count) { 'Guest or external user type' }))
             ExclusionApproved = $approved
-            SingleFactorSignIns = $sfCount; LegacyAuthSignIns = $legacyCount
+            SingleFactorSignIns = $sfCount; TokenBrokerSignIns = $brokerCount; SingleFactorSignInsExBroker = $sfOtherCount; LegacyAuthSignIns = $legacyCount
             Flags = ($flags -join '; ')
         }
     }
@@ -593,7 +618,9 @@ try {
     $failRows = foreach ($k in $sfByUpn.Keys) {
         $r = $(if ($inScope.ContainsKey($k)) { $inScope[$k] } else { $null })
         foreach ($s in $sfByUpn[$k]) {
+            $isBroker = Test-TokenBrokerSignIn $s.Row
             $cause = $(if (Test-LegacySignIn $s.Row) { 'Legacy authentication client' }
+                elseif ($isBroker) { 'Token broker / Windows sign-in (PRT): CA not evaluated on PRT issue or renewal; MFA satisfied earlier in the session' }
                 elseif ($r -and $r.Enforcement -eq 'Excluded') { 'Excluded from every baseline MFA policy' }
                 elseif ("$($s.Row.CaStatuses)" -match '^notApplied$') { 'No Conditional Access policy applied' }
                 elseif ($r -and $r.Enforcement -eq 'EnforcedWithConditions') { 'Sign-in matched an excluded location, app or device' }
@@ -601,7 +628,7 @@ try {
                 else { 'Policy applied without an MFA requirement for this sign-in (check location, app and client conditions)' })
             [pscustomobject][ordered]@{
                 Upn = $s.Row.UserPrincipalName; InScope = [bool]$r; Category = $(if ($r) { $r.Category } else { '' }); Populations = $(if ($r) { $r.Populations } else { '' })
-                SignInKind = $s.Kind; AppDisplayName = $s.Row.AppDisplayName; ClientAppUsed = $s.Row.ClientAppUsed; IsLegacyAuth = (Test-LegacySignIn $s.Row)
+                SignInKind = $s.Kind; AppDisplayName = $s.Row.AppDisplayName; ClientAppUsed = $s.Row.ClientAppUsed; IsLegacyAuth = (Test-LegacySignIn $s.Row); IsTokenBroker = $isBroker
                 SignInCount = $s.Row.SignInCount; FirstSeenUtc = $s.Row.FirstSeenUtc; LastSeenUtc = $s.Row.LastSeenUtc; CaStatuses = $s.Row.CaStatuses
                 Enforcement = $(if ($r) { $r.Enforcement } else { '' }); LikelyCause = $cause
             }
@@ -609,7 +636,7 @@ try {
     }
     $failRows = @($failRows | Sort-Object @{ Expression = 'InScope'; Descending = $true }, @{ Expression = { [int]("0$($_.SignInCount)") }; Descending = $true })
     if (-not $sf.Ok -and -not $ni.Ok) { Set-DatasetStatus -Name 'mfa-failures' -Status $(if ($sf.Status -in @('Blocked', 'Deferred', 'EvidenceUnavailable')) { $sf.Status } else { 'Blocked' }) -Note "single-factor sign-ins not usable: $($sf.Note)" }
-    else { Export-Dataset -Name 'mfa-failures' -Rows $failRows -Status $(Get-WorstStatus @($sf.Status, $(if (-not $sf.Ok) { 'Partial' }))) -Note ((@("Successful single-factor sign-ins in the 01 lookback window") + $(if (-not $ni.Ok) { "non-interactive sign-ins not included ($($ni.Status)); run 01 with -IncludeNonInteractive to add them" }) + $(if ($sf.Note) { $sf.Note })) -join '; ') }
+    else { Export-Dataset -Name 'mfa-failures' -Rows $failRows -Status $(Get-WorstStatus @($sf.Status, $(if (-not $sf.Ok) { 'Partial' }))) -Note ((@("Successful single-factor sign-ins in the 01 lookback window") + $(if ($TokenBrokerApps.Count) { "IsTokenBroker = True for $(Join-Values $TokenBrokerApps) (PRT events, not bypasses)" }) + $(if (-not $ni.Ok) { "non-interactive sign-ins not included ($($ni.Status)); run 01 with -IncludeNonInteractive to add them" }) + $(if ($sf.Note) { $sf.Note })) -join '; ') }
 
     # ---- 7. Measures ----
     $measures = [System.Collections.Generic.List[object]]::new()
@@ -635,7 +662,8 @@ try {
         if (-not $n) { continue }
         $c = { param($f) @($set | Where-Object $f).Count }
         Add-Measure $pn 'Protected (registered and enforced)' (& $c { $_.MfaState -eq 'Protected' }) $n 'Registered for MFA and covered by a baseline MFA policy they are not excluded from' $popSrc $stCa
-        Add-Measure $pn 'Protected with no single-factor sign-in' (& $c { $_.MfaState -eq 'Protected' -and [int]$_.SingleFactorSignIns -eq 0 }) $n 'Protected, and no successful single-factor sign-in in the 01 lookback window' $popSrc (Get-WorstStatus @($stCa, $sfStatus))
+        Add-Measure $pn 'Protected with no single-factor sign-in' (& $c { $_.MfaState -eq 'Protected' -and [int]$_.SingleFactorSignIns -eq 0 }) $n 'Protected, and no successful single-factor sign-in in the 01 lookback window (token broker / Windows sign-in counted)' $popSrc (Get-WorstStatus @($stCa, $sfStatus))
+        if ($TokenBrokerApps.Count) { Add-Measure $pn 'Protected with no single-factor sign-in (excluding token broker)' (& $c { $_.MfaState -eq 'Protected' -and [int]$_.SingleFactorSignInsExBroker -eq 0 }) $n "Protected, and no successful single-factor sign-in other than $(Join-Values $TokenBrokerApps) (PRT events)" $popSrc (Get-WorstStatus @($stCa, $sfStatus)) }
         Add-Measure $pn 'Registered for MFA' (& $c { Test-True $_.MfaRegistered }) $n 'isMfaRegistered in the authentication methods registration report' $popSrc $st
         Add-Measure $pn 'Phishing-resistant method registered' (& $c { Test-True $_.PhishResistant }) $n 'FIDO2, passkey, Windows Hello or certificate registered' $popSrc $st
         Add-Measure $pn 'Phone (SMS / voice) is the strongest method' (& $c { Test-True $_.PhoneOnly }) $n 'Strongest registered method is SMS or voice' $popSrc $st
@@ -647,12 +675,15 @@ try {
         Add-Measure $pn 'Enforced but not registered' (& $c { $_.MfaState -eq 'EnforcedNotRegistered' }) $n 'Will be asked to register at next sign-in; whoever signs in first registers the method' $popSrc $stCa
         Add-Measure $pn 'Registered but not enforced' (& $c { $_.MfaState -eq 'RegisteredNotEnforced' }) $n 'Has a method, but no baseline policy requires it' $popSrc $stCa
         Add-Measure $pn 'Not in the registration report' (& $c { $_.MfaState -eq 'NoRegistrationData' }) $n 'In the population but not in the 01 registration report (deleted since, or not readable)' $popSrc $st
-        Add-Measure $pn 'With successful single-factor sign-ins (failures)' (& $c { [int]$_.SingleFactorSignIns -gt 0 }) $n 'At least one successful single-factor sign-in in the 01 lookback window' $popSrc (Get-WorstStatus @($st, $sfStatus)) $(if (-not $ni.Ok) { 'Interactive sign-ins only (01 ran without -IncludeNonInteractive)' } else { 'Interactive and non-interactive sign-ins' })
+        $sfNote = $(if (-not $ni.Ok) { 'Interactive sign-ins only (01 ran without -IncludeNonInteractive)' } else { 'Interactive and non-interactive sign-ins' })
+        Add-Measure $pn 'With successful single-factor sign-ins (raw)' (& $c { [int]$_.SingleFactorSignIns -gt 0 }) $n 'At least one successful single-factor sign-in in the 01 lookback window, token broker / Windows sign-in (PRT) events included' $popSrc (Get-WorstStatus @($st, $sfStatus)) $sfNote
+        Add-Measure $pn 'With successful single-factor sign-ins (failures)' (& $c { [int]$_.SingleFactorSignInsExBroker -gt 0 }) $n $(if ($TokenBrokerApps.Count) { "At least one successful single-factor sign-in other than $(Join-Values $TokenBrokerApps), which are PRT events with CA not evaluated by design" } else { 'At least one successful single-factor sign-in in the 01 lookback window' }) $popSrc (Get-WorstStatus @($st, $sfStatus)) $sfNote
+        if ($TokenBrokerApps.Count) { Add-Measure $pn 'With token broker / Windows sign-in (PRT) events only' (& $c { [int]$_.TokenBrokerSignIns -gt 0 -and [int]$_.SingleFactorSignInsExBroker -eq 0 }) $n 'Every single-factor sign-in is a token broker or Windows sign-in (PRT) event: not a failure' $popSrc (Get-WorstStatus @($st, $sfStatus)) $sfNote }
         Add-Measure $pn 'With legacy authentication sign-ins' (& $c { [int]$_.LegacyAuthSignIns -gt 0 }) $n 'At least one successful legacy-protocol sign-in' $popSrc (Get-WorstStatus @($st, $sfStatus))
     }
     Add-Measure 'Tenant' 'Baseline MFA policies' $baseline.Count '' (Join-Values ($baseline | ForEach-Object { $_.PolicyName })) $src01 $(if ($pol.Ok) { $pol.Status } else { 'Blocked' }) $(if ($MfaPolicyNames.Count) { 'Named with -MfaPolicyNames' } else { 'Detected: enabled, MFA, all users, all apps, all clients, no risk / include-location / include-platform condition' })
     if ($popEx.Ok) { Add-Measure 'Tenant' 'Enabled accounts left out of the workforce population' @($exRows | Where-Object { $_.ExclusionKind -eq 'Population' }).Count '' 'Script 27 population-exclusions for the Entra workforce (category rules, approved exclusions, no HR match, HR not active)' $src27 $popEx.Status }
-    Add-Measure 'Tenant' 'Single-factor sign-ins by accounts outside every population' @($failRows | Where-Object { -not $_.InScope }).Count '' 'Service, shared or unclassified accounts signing in without MFA' $src01 $sfStatus
+    Add-Measure 'Tenant' 'Single-factor sign-ins by accounts outside every population' @($failRows | Where-Object { -not $_.InScope -and -not $_.IsTokenBroker }).Count '' 'Service, shared or unclassified accounts signing in without MFA (rows; token broker / Windows sign-in rows not counted)' $src01 $sfStatus
     Export-Dataset -Name 'mfa-effectiveness-measures' -Rows $measures -Status $(if ((Get-WorstStatus @($measures | ForEach-Object { $_.Status })) -eq 'Completed') { 'Completed' } else { 'Partial' }) -Note ('Status per row; a row that is not Completed says why in Note or in source-runs. ' + ($denomNotes -join '; '))
     Export-Dataset -Name 'source-runs' -Rows $script:SourceRows -Note 'Every source dataset read: run folder, source status and SHA-256 check against that run'
 
@@ -661,12 +692,12 @@ try {
     function Add-Metric { param($Metric, $Value, $Note = '') $summary.Add([pscustomobject][ordered]@{ Metric = $Metric; Value = $Value; Note = $Note }) }
     $mainPop = @($popNames.Keys)[0]
     Add-Metric 'Denominator basis' $denomMode $(if ($denomMode -eq 'Agreed') { 'Script 27 with an HR file' } else { $denomNotes -join '; ' })
-    foreach ($mName in @('Population (denominator)', 'Protected (registered and enforced)', 'Registered for MFA', 'Enforced by a baseline MFA policy', 'Excluded from every baseline MFA policy', 'With successful single-factor sign-ins (failures)', 'Phishing-resistant method registered')) {
+    foreach ($mName in @('Population (denominator)', 'Protected (registered and enforced)', 'Registered for MFA', 'Enforced by a baseline MFA policy', 'Excluded from every baseline MFA policy', 'Enforced only with conditions', 'With successful single-factor sign-ins (raw)', 'With successful single-factor sign-ins (failures)', 'Phishing-resistant method registered')) {
         $mr = @($measures | Where-Object { $_.Population -eq $mainPop -and $_.Measure -eq $mName }) | Select-Object -First 1
-        if ($mr) { Add-Metric "$mainPop - $mName" $mr.Value $(if ($mr.Percent -ne '') { "$($mr.Percent)% [$($mr.Status)]" } else { "[$($mr.Status)]" }) }
+        if ($mr) { Add-Metric "$mainPop - $mName" $mr.Value $(if ("$($mr.Percent)" -ne '') { "$($mr.Percent)% [$($mr.Status)]" } else { "[$($mr.Status)]" }) }
     }
     $pp = @($measures | Where-Object { $_.Population -like 'Privileged*' -and $_.Measure -eq 'Protected (registered and enforced)' }) | Select-Object -First 1
-    if ($pp) { Add-Metric 'Privileged accounts protected' $pp.Value $(if ($pp.Percent -ne '') { "$($pp.Percent)% of $($pp.Denominator) [$($pp.Status)]" } else { "[$($pp.Status)]" }) }
+    if ($pp) { Add-Metric 'Privileged accounts protected' $pp.Value $(if ("$($pp.Percent)" -ne '') { "$($pp.Percent)% of $($pp.Denominator) [$($pp.Status)]" } else { "[$($pp.Status)]" }) }
     Add-Metric 'Baseline MFA policies' $baseline.Count (Join-Values ($baseline | ForEach-Object { $_.PolicyName }))
     Add-Metric 'Identities assessed' $rows.Count
     Add-Metric 'Source datasets not usable' @($script:SourceRows | Where-Object { $_.UsedAs -like 'Not used:*' }).Count (Join-Values ($script:SourceRows | Where-Object { $_.UsedAs -like 'Not used:*' } | ForEach-Object { "$($_.Script) $($_.Dataset): $($_.UsedAs -replace '^Not used: ', '')" }))
