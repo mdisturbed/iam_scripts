@@ -66,7 +66,7 @@
     .\09-Get-MailForwardingAndSharing.ps1 -SharePointAdminUrl https://contoso-admin.sharepoint.com -IncludeExternalUsers
 
 .NOTES
-    Version : 1.1.1
+    Version : 1.1.2
     Requires: PowerShell 5.1 or 7.x
               ExchangeOnlineManagement v3 module; Exchange role: Global Reader or View-Only Organization Management
               Microsoft.Graph.Authentication with SharePointTenantSettings.Read.All (tenant sharing settings)
@@ -98,7 +98,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ScriptName    = '09-MailAndSharing'
-$ScriptVersion = '1.1.1'
+$ScriptVersion = '1.1.2'
 $RequiredScopes = @('SharePointTenantSettings.Read.All')
 
 #region ---- Common helpers (identical in every Graph script; self-contained by design) ----
@@ -625,7 +625,7 @@ try {
     }
     catch { Set-DatasetStatus -Name 'application-access-policies' -Status 'Blocked' -Note $_.Exception.Message }
     try {
-        $appRbacRows = @(Get-ManagementRoleAssignment -ResultSize Unlimited -ErrorAction Stop | Where-Object { "$($_.RoleAssigneeType)" -eq 'ServicePrincipal' } | ForEach-Object {
+        $appRbacRows = @(Get-ManagementRoleAssignment -ErrorAction Stop | Where-Object { "$($_.RoleAssigneeType)" -eq 'ServicePrincipal' } | ForEach-Object {
             [pscustomobject][ordered]@{ App = "$($_.RoleAssigneeName)"; Role = "$($_.Role)"; AssignmentName = "$($_.Name)"; CustomResourceScope = "$($_.CustomResourceScope)"; RecipientWriteScope = "$($_.RecipientWriteScope)"; Enabled = $_.Enabled; Flags = $(if (-not "$($_.CustomResourceScope)" -and "$($_.RecipientWriteScope)" -match 'Organization|^$') { 'OrganizationWide' } else { '' }) }
         })
         Export-Dataset -Name 'app-rbac-role-assignments' -Rows $appRbacRows -Note 'Exchange RBAC for Applications: application roles granted to service principals; OrganizationWide = no custom resource scope'

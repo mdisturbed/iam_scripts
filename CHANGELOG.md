@@ -2,6 +2,11 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.16.1 - 2026-11-16
+
+### Fixed
+- `09-Get-MailForwardingAndSharing.ps1` 1.1.2: `app-rbac-role-assignments` called `Get-ManagementRoleAssignment -ResultSize Unlimited`. That cmdlet has no `-ResultSize` parameter, so the dataset came back Blocked with *A parameter cannot be found that matches parameter name 'ResultSize'* whatever role the account held. The parameter is removed; the cmdlet returns every assignment without it. Rerun 09 if that dataset was Blocked with this message.
+
 ## 1.16.0 - 2026-11-09
 
 ### Added

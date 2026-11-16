@@ -153,7 +153,7 @@ When a script is pilot-verified, hand it over with:
 | 06 JML timing | 1.1.0 | | | | | Mock-tested |
 | 07 Role mining | 1.1.0 | | | | | Mock-tested |
 | 08 Extension attributes | 1.1.1 | | | | | Mock-tested |
-| 09 Mail and sharing | 1.1.1 | | | | | Mock-tested |
+| 09 Mail and sharing | 1.1.2 | | | | | Mock-tested |
 | 10 Guests | 1.1.1 | | | | | Mock-tested |
 | 11 Azure RBAC | 1.1.2 | | | | | Mock-tested |
 | 12 Stale accounts | 1.1.1 | | | | | Mock-tested |
