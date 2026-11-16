@@ -55,7 +55,7 @@
     .\11-Get-AzureRbac.ps1 -AuthMode AppCertificate -TenantId tenant-id-redacted -ClientId <app-id> -CertificateThumbprint <thumbprint>
 
 .NOTES
-    Version : 1.1.2
+    Version : 1.1.3
     Requires: PowerShell 5.1 or 7.x, Az.Accounts module, Microsoft.Graph.Authentication module
     Azure   : Reader on the root management group (or each subscription) to see all assignments,
               Key Vaults, Lighthouse registrations, deny assignments and managed identities
@@ -82,8 +82,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Export-Csv arguments. -NoTypeInformation is needed on Windows PowerShell 5.1 and is obsolete on PowerShell 7.7+,
+# where passing it prints a warning; PowerShell 6 and later leave type information out by default.
+$CsvOut = @{ Encoding = 'UTF8' }
+if ($PSVersionTable.PSVersion.Major -lt 6) { $CsvOut.NoTypeInformation = $true }
 $ScriptName    = '11-AzureRbac'
-$ScriptVersion = '1.1.2'
+$ScriptVersion = '1.1.3'
 $RequiredScopes = @('Directory.Read.All')
 
 #region ---- Common helpers (identical in every Graph script; self-contained by design) ----
@@ -202,7 +206,7 @@ function Export-Dataset {
             $o = [ordered]@{}
             foreach ($pp in $_.PSObject.Properties) { $o[$pp.Name] = $(if ($pp.Value -is [datetime]) { $pp.Value.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') } else { $pp.Value }) }
             [pscustomobject]$o
-        } | Export-Csv -Path $file -NoTypeInformation -Encoding UTF8
+        } | Export-Csv -Path $file @CsvOut
         $count = @($Rows).Count
     }
     else { Set-Content -Path $file -Value '' -Encoding UTF8 }
@@ -238,7 +242,7 @@ function Write-RunManifest {
     }
     if ($script:ManifestExtra) { $manifest['Extra'] = $script:ManifestExtra }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $script:RunFolder 'run-manifest.json') -Encoding UTF8
-    $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') -NoTypeInformation -Encoding UTF8
+    $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') @CsvOut
 }
 
 function Join-Values { param($Values) if ($null -eq $Values) { return '' } return (@($Values) | Where-Object { $null -ne $_ -and "$_" -ne '' }) -join '; ' }
@@ -711,15 +715,26 @@ try {
     # ---- 8. Classic administrators ----
     $classicRows = [System.Collections.Generic.List[object]]::new()
     $classicFailed = 0
+    $classicRetired = $false
     foreach ($s in $subs) {
         try {
             foreach ($c in (Invoke-ArmGetAll -Uri "$Arm/subscriptions/$($s.subscriptionId)/providers/Microsoft.Authorization/classicAdministrators?api-version=2015-07-01")) {
                 $classicRows.Add([pscustomobject][ordered]@{ Subscription = $s.displayName; EmailAddress = $c.properties.emailAddress; Role = $c.properties.role })
             }
         }
-        catch { $classicFailed++; Write-RunLog ("Classic administrators unreadable for {0}: {1}" -f $s.subscriptionId, $_.Exception.Message) 'WARN' }
+        catch {
+            # Microsoft retired the classic administrator roles on 2024-08-31. Where the API has been removed it
+            # answers 404 "resource type could not be found" for every subscription: record that once and stop asking.
+            if ("$($_.Exception.Message)" -match '404' -and "$($_.Exception.Message)" -match 'resource type could not be found') {
+                $classicRetired = $true
+                Write-RunLog 'Classic administrators: the API is no longer available (HTTP 404). Microsoft retired these roles on 2024-08-31; not read for any subscription'
+                break
+            }
+            $classicFailed++; Write-RunLog ("Classic administrators unreadable for {0}: {1}" -f $s.subscriptionId, $_.Exception.Message) 'WARN'
+        }
     }
-    Export-Dataset -Name 'azure-classic-administrators' -Rows $classicRows -Status $(if ($classicFailed) { 'Partial' } else { 'Completed' }) -Note ('Classic administrators are retired by Microsoft; any remaining should be converted to RBAC' + $(if ($classicFailed) { "; $classicFailed subscription(s) unreadable" } else { '' }))
+    $classicNote = $(if ($classicRetired) { 'Not applicable: Microsoft retired the classic administrator roles on 2024-08-31 and the API no longer answers (HTTP 404), so there is nothing to read' } else { 'Classic administrators are retired by Microsoft; any remaining should be converted to RBAC' + $(if ($classicFailed) { "; $classicFailed subscription(s) unreadable" } else { '' }) })
+    Export-Dataset -Name 'azure-classic-administrators' -Rows $classicRows -Status $(if ($classicFailed) { 'Partial' } else { 'Completed' }) -Note $classicNote
 
     # ---- 9. Key Vaults: permission model and access policies ----
     $kvRows = [System.Collections.Generic.List[object]]::new()
@@ -844,7 +859,7 @@ try {
     }
     Add-Metric -Metric 'Custom roles' @($customRows).Count
     Add-Metric -Metric 'Custom roles flagged risky' @($customRows | Where-Object Risky).Count
-    Add-Metric -Metric 'Classic administrators' $classicRows.Count
+    Add-Metric -Metric 'Classic administrators' $classicRows.Count $(if ($classicRetired) { 'Not applicable: roles retired by Microsoft on 2024-08-31; the API returns 404' } else { '' })
     if (-not $SkipKeyVaults) {
         Add-Metric -Metric 'Key Vaults' $kvRows.Count
         Add-Metric -Metric 'Key Vaults using access policies (legacy model)' @($kvRows | Where-Object PermissionModel -eq 'AccessPolicy').Count 'Prefer Azure RBAC for data access'

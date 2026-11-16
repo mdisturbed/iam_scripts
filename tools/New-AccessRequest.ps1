@@ -71,6 +71,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Export-Csv arguments. -NoTypeInformation is needed on Windows PowerShell 5.1 and is obsolete on PowerShell 7.7+,
+# where passing it prints a warning; PowerShell 6 and later leave type information out by default.
+$CsvOut = @{ Encoding = 'UTF8' }
+if ($PSVersionTable.PSVersion.Major -lt 6) { $CsvOut.NoTypeInformation = $true }
 $ScriptName    = 'New-AccessRequest'
 $ScriptVersion = '1.0.0'
 
@@ -114,7 +118,7 @@ function Export-Dataset {
     $file = Join-Path $script:RunFolder ("{0}.csv" -f $Name)
     $count = 0
     if ($Rows -and @($Rows).Count -gt 0) {
-        $Rows | Export-Csv -Path $file -NoTypeInformation -Encoding UTF8
+        $Rows | Export-Csv -Path $file @CsvOut
         $count = @($Rows).Count
     }
     else { Set-Content -Path $file -Value '' -Encoding UTF8 }
@@ -154,7 +158,7 @@ function Write-RunManifest {
     }
     if ($script:ManifestExtra) { $manifest['Extra'] = $script:ManifestExtra }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $script:RunFolder 'run-manifest.json') -Encoding UTF8
-    $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') -NoTypeInformation -Encoding UTF8
+    $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') @CsvOut
 }
 #endregion
 

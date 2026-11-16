@@ -2,6 +2,12 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.16.2 - 2026-11-16
+
+### Changed
+- `11-Get-AzureRbac.ps1` 1.1.3: the classic administrators check recognises a retired API. Microsoft retired the Co-Administrator and Service Administrator roles on 2024-08-31; where the API answers 404 *resource type could not be found*, the script logs that once and stops asking, where it used to log a warning for every subscription. `azure-classic-administrators` is then Completed with a note that the check is not applicable, and the summary metric carries the same note (the value stays 0 so finding rules keep working). Any other read failure is still counted per subscription and makes the dataset Partial.
+- All scripts and tools: `Export-Csv` no longer passes `-NoTypeInformation` on PowerShell 6 and later. PowerShell 7.7 marks the parameter obsolete and prints a warning on every export. It is still passed on Windows PowerShell 5.1, which needs it. Output files are unchanged, so script versions other than 11 are not bumped. Tested on PowerShell 7.4 and 7.7; not run on 5.1.
+
 ## 1.16.1 - 2026-11-16
 
 ### Fixed

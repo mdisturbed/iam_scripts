@@ -76,6 +76,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Export-Csv arguments. -NoTypeInformation is needed on Windows PowerShell 5.1 and is obsolete on PowerShell 7.7+,
+# where passing it prints a warning; PowerShell 6 and later leave type information out by default.
+$CsvOut = @{ Encoding = 'UTF8' }
+if ($PSVersionTable.PSVersion.Major -lt 6) { $CsvOut.NoTypeInformation = $true }
 $ScriptName    = '01-MfaCoverage'
 $ScriptVersion = '1.2.1'
 $RequiredScopes = @('Policy.Read.All', 'Directory.Read.All', 'AuditLog.Read.All', 'UserAuthenticationMethod.Read.All')
@@ -197,7 +201,7 @@ function Export-Dataset {
             $o = [ordered]@{}
             foreach ($pp in $_.PSObject.Properties) { $o[$pp.Name] = $(if ($pp.Value -is [datetime]) { $pp.Value.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') } else { $pp.Value }) }
             [pscustomobject]$o
-        } | Export-Csv -Path $file -NoTypeInformation -Encoding UTF8
+        } | Export-Csv -Path $file @CsvOut
         $count = @($Rows).Count
     }
     else { Set-Content -Path $file -Value '' -Encoding UTF8 }
@@ -233,7 +237,7 @@ function Write-RunManifest {
     }
     if ($script:ManifestExtra) { $manifest['Extra'] = $script:ManifestExtra }
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $script:RunFolder 'run-manifest.json') -Encoding UTF8
-    $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') -NoTypeInformation -Encoding UTF8
+    $script:Datasets | Export-Csv -Path (Join-Path $script:RunFolder 'dataset-status.csv') @CsvOut
 }
 
 function Join-Values { param($Values) if ($null -eq $Values) { return '' } return (@($Values) | Where-Object { $null -ne $_ -and "$_" -ne '' }) -join '; ' }
