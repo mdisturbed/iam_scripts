@@ -27,19 +27,27 @@
     # Runs more than -MaxRunSpreadDays apart make the KPI Partial: run the sources in the same window.
     # =====================================================================
     Kpis = @(
-        # [needs 27] Members (not guests) whose account is enabled and MFA registered, over the agreed human
-        # workforce. mfa-registration also lists service and shared accounts that are members; if 27 excludes
-        # them, a numerator over 100% of the denominator shows up as Partial with a note.
+        # [needs 27 and 32] Workforce members registered for MFA, over the agreed human workforce. Both sides
+        # count the same population: script 32 measures registration only for the identities script 27 puts in
+        # the workforce. (Counting every enabled member from 01 here instead would also count shared, service
+        # and admin accounts, and gives a value over 100%.)
         @{
             Id          = 'MFA-01'
             Name        = 'MFA registration coverage of the human workforce'
-            Description = 'Enabled member users registered for MFA, over Human workforce enabled (Entra)'
+            Description = 'Human workforce members registered for MFA (script 32), over Human workforce enabled (Entra)'
             Direction   = 'HigherIsBetter'
             Target      = 98
-            Numerator   = @{ Script = '01'; Dataset = 'mfa-registration'; Filters = @(
-                    @{ Column = 'UserType'; Value = 'member' }
-                    @{ Column = 'AccountEnabled'; Value = 'True' }
-                    @{ Column = 'IsMfaRegistered'; Value = 'True' }) }
+            Numerator   = @{ Script = '32'; Metric = 'Human workforce enabled (Entra) - Registered for MFA' }
+            Denominator = @{ Population = 'Human workforce enabled (Entra)' }
+        }
+        # [needs 27 and 32] Registered and covered by a baseline MFA policy they are not excluded from.
+        @{
+            Id          = 'MFA-01b'
+            Name        = 'MFA protection of the human workforce (registered and enforced)'
+            Description = 'Human workforce members registered for MFA and enforced by a baseline MFA policy (script 32), over Human workforce enabled (Entra)'
+            Direction   = 'HigherIsBetter'
+            Target      = 98
+            Numerator   = @{ Script = '32'; Metric = 'Human workforce enabled (Entra) - Protected (registered and enforced)' }
             Denominator = @{ Population = 'Human workforce enabled (Entra)' }
         }
         # Same KPI without 27: both sides from one dataset, so no denominator contract. Use until 27 is agreed.

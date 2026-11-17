@@ -27,6 +27,7 @@
       - Blocked              denominator is zero
       - Partial              numerator and denominator runs more than -MaxRunSpreadDays apart, or the
                              numerator is larger than the denominator (the two count different things)
+                             and then MeetsTarget is left blank
     When several apply, the most serious wins: NotRun, Blocked, EvidenceUnavailable, Deferred, Partial.
 
     Local only: reads run folders, writes only its own run folder. Connects to nothing.
@@ -55,7 +56,7 @@
     .\tools\Get-KpiSummary.ps1 -EvidenceRoot D:\Evidence -KpiDefinitionPath D:\Programme\kpi-definitions.psd1 -AsOf 2026-11-01T00:00:00Z
 
 .NOTES
-    Version : 1.0.0
+    Version : 1.0.1
     Requires: PowerShell 5.1 or 7.x. Runs of the scripts the definitions name; 27 for Population denominators.
     Scopes  : none. Reads local files only.
     Licence : none
@@ -78,7 +79,7 @@ $ErrorActionPreference = 'Stop'
 $CsvOut = @{ Encoding = 'UTF8' }
 if ($PSVersionTable.PSVersion.Major -lt 6) { $CsvOut.NoTypeInformation = $true }
 $ScriptName    = 'Get-KpiSummary'
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 
 if (-not (Test-Path -LiteralPath $EvidenceRoot)) { throw "Evidence folder not found: $EvidenceRoot" }
 $EvidenceRoot = (Resolve-Path -LiteralPath $EvidenceRoot).Path
@@ -379,7 +380,7 @@ try {
                 $value = [math]::Round(100.0 * $num.Count / $den.Count, 1, [MidpointRounding]::AwayFromZero)
                 if ($num.Count -gt $den.Count) {
                     if ($script:Severity[$status] -lt $script:Severity['Partial']) { $status = 'Partial' }
-                    $notes.Add('numerator is larger than the denominator: they count different populations; check the definition')
+                    $notes.Add('numerator is larger than the denominator: they count different populations; MeetsTarget is not evaluated; check the definition')
                 }
             }
         }
@@ -392,7 +393,10 @@ try {
         }
         $target = $(if ($k.ContainsKey('Target') -and "$($k.Target)" -ne '') { ConvertTo-Number ([string]$k.Target) } else { $null })
         $meets = ''
-        if ($null -ne $target -and "$value" -ne '') { $meets = $(if ($k.Direction -eq 'HigherIsBetter') { $value -ge $target } else { $value -le $target }) }
+        # A numerator larger than its denominator means the two count different populations, so the value says
+        # nothing about the target: leave MeetsTarget blank and never report such a KPI as met.
+        $mismatched = ($null -ne $num.Count -and $null -ne $den.Count -and $num.Count -gt $den.Count)
+        if ($null -ne $target -and "$value" -ne '' -and -not $mismatched) { $meets = $(if ($k.Direction -eq 'HigherIsBetter') { $value -ge $target } else { $value -le $target }) }
         Write-RunLog ("{0}: {1} / {2} = {3} [{4}] {5}" -f $k.Id, $num.Count, $den.Count, $value, $status, ($notes -join '; ')) $(if ($status -eq 'Completed') { 'INFO' } else { 'WARN' })
         [pscustomobject][ordered]@{
             KpiId             = $k.Id

@@ -2,6 +2,12 @@
 
 All notable changes to these scripts are recorded here. Each script also carries its own `$ScriptVersion`, which is written to every run manifest, so evidence can always be tied to the exact code that produced it.
 
+## 1.16.3 - 2026-11-17
+
+### Fixed
+- `Get-KpiSummary.ps1` 1.0.1: a KPI whose numerator is larger than its denominator no longer reports `MeetsTarget`. The two sides count different populations, so a value over 100% could show as meeting a higher-is-better target. The KPI is still Partial with a note; `MeetsTarget` is now blank.
+- `examples/kpi-definitions.example.psd1`: `MFA-01` takes its numerator from script 32 (*Human workforce enabled (Entra) - Registered for MFA*), so both sides count the agreed workforce. The old numerator counted every enabled member in script 01's registration report, including shared, service and admin accounts, and went over 100% once script 27 had an HR file. New `MFA-01b` measures registered and enforced the same way. Both need runs of 27 and 32. Engagements that copied the old file into `config\kpi-definitions.psd1` need the same edit there.
+
 ## 1.16.2 - 2026-11-16
 
 ### Changed
